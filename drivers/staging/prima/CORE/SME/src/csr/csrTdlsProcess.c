@@ -47,12 +47,8 @@
   
     Implementation for the TDLS interface to PE.
   
-   Copyright (c) 2013 Qualcomm Atheros, Inc.All Rights Reserved.
-   Qualcomm Atheros Confidential and Proprietary.
-    
-   Copyright (c) 2010 Qualcomm Technologies, Inc.All Rights Reserved.
-   Qualcomm Technologies Confidential and Proprietary
-
+    Copyright (C) 2010 Qualcomm, Incorporated
+  
  
    ========================================================================== */
 
@@ -137,8 +133,6 @@ eHalStatus csrTdlsSendMgmtReq(tHalHandle hHal, tANI_U8 sessionId, tCsrTdlsSendMg
             tTdlsSendMgmtCmdInfo *tdlsSendMgmtCmdInfo = 
                             &tdlsSendMgmtCmd->u.tdlsCmd.u.tdlsSendMgmtCmdInfo ;
 
-            vos_mem_zero(&tdlsSendMgmtCmd->u.tdlsCmd, sizeof(tTdlsCmd));
-
             tdlsSendMgmtCmd->sessionId = sessionId;
 
             tdlsSendMgmtCmdInfo->frameType = tdlsSendMgmt->frameType ;   
@@ -200,8 +194,6 @@ eHalStatus csrTdlsChangePeerSta(tHalHandle hHal, tANI_U8 sessionId, tSirMacAddr 
             tTdlsAddStaCmdInfo *tdlsAddStaCmdInfo =
                          &tdlsAddStaCmd->u.tdlsCmd.u.tdlsAddStaCmdInfo ;
 
-            vos_mem_zero(&tdlsAddStaCmd->u.tdlsCmd, sizeof(tTdlsCmd));
-
             tdlsAddStaCmdInfo->tdlsAddOper = TDLS_OPER_UPDATE;
 
             tdlsAddStaCmd->sessionId = sessionId;
@@ -215,19 +207,11 @@ eHalStatus csrTdlsChangePeerSta(tHalHandle hHal, tANI_U8 sessionId, tSirMacAddr 
                           pstaParams->extn_capability,
                           sizeof(pstaParams->extn_capability));
 
-            tdlsAddStaCmdInfo->htcap_present = pstaParams->htcap_present;
-            if(pstaParams->htcap_present)
-                palCopyMemory(pMac->hHdd, &tdlsAddStaCmdInfo->HTCap,
-                              &pstaParams->HTCap, sizeof(pstaParams->HTCap));
-            else
-                palZeroMemory(pMac->hHdd, &tdlsAddStaCmdInfo->HTCap, sizeof(pstaParams->HTCap));
+            palCopyMemory(pMac->hHdd, &tdlsAddStaCmdInfo->HTCap,
+                          &pstaParams->HTCap, sizeof(pstaParams->HTCap));
 
-            tdlsAddStaCmdInfo->vhtcap_present = pstaParams->vhtcap_present;
-            if(pstaParams->vhtcap_present)
-                palCopyMemory(pMac->hHdd, &tdlsAddStaCmdInfo->VHTCap,
-                              &pstaParams->VHTCap, sizeof(pstaParams->VHTCap));
-            else
-                palZeroMemory(pMac->hHdd, &tdlsAddStaCmdInfo->VHTCap, sizeof(pstaParams->VHTCap));
+            palCopyMemory(pMac->hHdd, &tdlsAddStaCmdInfo->VHTCap,
+                          &pstaParams->VHTCap, sizeof(pstaParams->VHTCap));
 
 			tdlsAddStaCmdInfo->supportedRatesLen = pstaParams->supported_rates_len;
 
@@ -267,8 +251,6 @@ eHalStatus csrTdlsAddPeerSta(tHalHandle hHal, tANI_U8 sessionId, tSirMacAddr pee
             tTdlsAddStaCmdInfo *tdlsAddStaCmdInfo = 
                 &tdlsAddStaCmd->u.tdlsCmd.u.tdlsAddStaCmdInfo ;
 
-            vos_mem_zero(&tdlsAddStaCmd->u.tdlsCmd, sizeof(tTdlsCmd));
-
             tdlsAddStaCmd->sessionId = sessionId;
             tdlsAddStaCmdInfo->tdlsAddOper = TDLS_OPER_ADD;
 
@@ -306,8 +288,6 @@ eHalStatus csrTdlsDelPeerSta(tHalHandle hHal, tANI_U8 sessionId, tSirMacAddr pee
             tTdlsDelStaCmdInfo *tdlsDelStaCmdInfo = 
                             &tdlsDelStaCmd->u.tdlsCmd.u.tdlsDelStaCmdInfo ;
 
-            vos_mem_zero(&tdlsDelStaCmd->u.tdlsCmd, sizeof(tTdlsCmd));
-
             tdlsDelStaCmd->sessionId = sessionId;
 
             palCopyMemory(pMac->hHdd, tdlsDelStaCmdInfo->peerMac, 
@@ -341,8 +321,6 @@ eHalStatus csrTdlsDiscoveryReq(tHalHandle hHal, tANI_U8 sessionId, tCsrTdlsDisRe
         {
             tTdlsDisReqCmdinfo *disReqCmdInfo = 
                             &tdlsDisReqCmd->u.tdlsCmd.u.tdlsDisReqCmdInfo ;
-
-            vos_mem_zero(&tdlsDisReqCmd->u.tdlsCmd, sizeof(tTdlsCmd));
 
             tdlsDisReqCmd->sessionId = sessionId;
 
@@ -378,8 +356,6 @@ eHalStatus csrTdlsSetupReq(tHalHandle hHal, tANI_U8 sessionId, tCsrTdlsSetupRequ
            tTdlsLinkSetupReqCmdinfo *setupCmdInfo = 
                         &tdlsSetupReqCmd->u.tdlsCmd.u.tdlsLinkSetupReqCmdInfo ;
 
-            vos_mem_zero(&tdlsSetupReqCmd->u.tdlsCmd, sizeof(tTdlsCmd));
-
             tdlsSetupReqCmd->sessionId = sessionId;
 
             palCopyMemory(pMac->hHdd, setupCmdInfo->peerMac, 
@@ -412,8 +388,6 @@ eHalStatus csrTdlsTeardownReq(tHalHandle hHal, tANI_U8 sessionId,
         {
             tTdlsLinkTeardownCmdinfo *teardownCmdInfo = 
                    &tdlsTeardownReqCmd->u.tdlsCmd.u.tdlsLinkTeardownCmdInfo ;
-
-            vos_mem_zero(&tdlsTeardownReqCmd->u.tdlsCmd, sizeof(tTdlsCmd));
 
             tdlsTeardownReqCmd->sessionId = sessionId;
 
@@ -462,11 +436,6 @@ eHalStatus csrTdlsProcessSendMgmt( tpAniSirGlobal pMac, tSmeCmd *cmd )
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, cmd->sessionId );
     eHalStatus status = eHAL_STATUS_FAILURE;
 
-    if (NULL == pSession)
-    {
-        return eHAL_STATUS_FAILURE;
-    }
-
     if (NULL == pSession->pConnectBssDesc)
     {
         smsLog( pMac, LOGE, FL("BSS Description is not present") );
@@ -514,7 +483,6 @@ eHalStatus csrTdlsProcessSendMgmt( tpAniSirGlobal pMac, tSmeCmd *cmd )
     {
         //Done with the buf. Free it.
         palFreeMemory( pMac->hHdd, tdlsSendMgmtCmdInfo->buf );
-        tdlsSendMgmtCmdInfo->buf = NULL;
         tdlsSendMgmtCmdInfo->len = 0;
     }
 
@@ -527,11 +495,6 @@ eHalStatus csrTdlsProcessAddSta( tpAniSirGlobal pMac, tSmeCmd *cmd )
     tSirTdlsAddStaReq *tdlsAddStaReq = NULL ;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, cmd->sessionId );
     eHalStatus status = eHAL_STATUS_FAILURE;
-
-    if (NULL == pSession)
-    {
-        return eHAL_STATUS_FAILURE;
-    }
 
     if (NULL == pSession->pConnectBssDesc)
     {
@@ -548,8 +511,6 @@ eHalStatus csrTdlsProcessAddSta( tpAniSirGlobal pMac, tSmeCmd *cmd )
         VOS_ASSERT(0) ;
         return status ;
     }
-    vos_mem_set(tdlsAddStaReq, sizeof(tSirTdlsAddStaReq), 0);
-
     tdlsAddStaReq->sessionId = cmd->sessionId;
     tdlsAddStaReq->tdlsAddOper = tdlsAddStaCmdInfo->tdlsAddOper;
     //Using dialog as transactionId. This can be used to match response with request
@@ -568,10 +529,8 @@ eHalStatus csrTdlsProcessAddSta( tpAniSirGlobal pMac, tSmeCmd *cmd )
     palCopyMemory(pMac->hHdd, tdlsAddStaReq->extn_capability,
                               tdlsAddStaCmdInfo->extnCapability,
                               SIR_MAC_MAX_EXTN_CAP);
-    tdlsAddStaReq->htcap_present = tdlsAddStaCmdInfo->htcap_present;
     palCopyMemory(pMac->hHdd, &tdlsAddStaReq->htCap,
                   &tdlsAddStaCmdInfo->HTCap, sizeof(tdlsAddStaCmdInfo->HTCap));
-    tdlsAddStaReq->vhtcap_present = tdlsAddStaCmdInfo->vhtcap_present;
     palCopyMemory(pMac->hHdd, &tdlsAddStaReq->vhtCap,
                   &tdlsAddStaCmdInfo->VHTCap, sizeof(tdlsAddStaCmdInfo->VHTCap));
     tdlsAddStaReq->supported_rates_length = tdlsAddStaCmdInfo->supportedRatesLen;
@@ -595,11 +554,6 @@ eHalStatus csrTdlsProcessDelSta( tpAniSirGlobal pMac, tSmeCmd *cmd )
     tSirTdlsDelStaReq *tdlsDelStaReq = NULL ;
     tCsrRoamSession *pSession = CSR_GET_SESSION( pMac, cmd->sessionId );
     eHalStatus status = eHAL_STATUS_FAILURE;
-
-    if (NULL == pSession)
-    {
-        return eHAL_STATUS_FAILURE;
-    }
 
     if (NULL == pSession->pConnectBssDesc)
     {

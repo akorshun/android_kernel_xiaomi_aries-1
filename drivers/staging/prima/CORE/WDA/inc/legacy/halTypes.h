@@ -39,7 +39,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-
 /** ------------------------------------------------------------------------- *
     ------------------------------------------------------------------------- *
 
@@ -231,11 +230,9 @@ typedef enum
     eHAL_STATUS_SET_CHAN_ALREADY_ON_REQUESTED_CHAN,
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
-    eHAL_STATUS_FT_PREAUTH_KEY_SUCCESS,
-    eHAL_STATUS_FT_PREAUTH_KEY_FAILED,
+    eHAL_STATUS_FT_PREAUTH_KEY_WAIT,
 #endif
-    //CMD not Queued in SME
-    eHAL_STATUS_CMD_NOT_QUEUED,
+
     // not a real status.  Just a way to mark the maximum in the enum.
     eHAL_STATUS_MAX
 

@@ -72,7 +72,6 @@
 #include "vos_nvitem.h"
 #include "sirApi.h"
 #include "wlan_qct_pal_packet.h"
-#include "wlan_qct_pal_device.h"
 #include "wlan_qct_wda.h"
 #include "wlan_qct_wda_msg.h"
 #include "wlan_qct_wdi_cfg.h"
@@ -181,12 +180,6 @@ static VOS_STATUS WDA_ProcessSetPrefNetworkReq(tWDA_CbContext *pWDA, tSirPNOScan
 static VOS_STATUS WDA_ProcessSetRssiFilterReq(tWDA_CbContext *pWDA, tSirSetRSSIFilterReq* pRssiFilterParams);
 static VOS_STATUS WDA_ProcessUpdateScanParams(tWDA_CbContext *pWDA, tSirUpdateScanParams *pUpdateScanParams);
 #endif // FEATURE_WLAN_SCAN_PNO
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-VOS_STATUS WDA_ProcessRoamScanOffloadReq(tWDA_CbContext *pWDA,tSirRoamOffloadScanReq *pRoamOffloadScanReqParams);
-void WDA_RoamOffloadScanReqCallback(WDI_Status status, void* pUserData);
-void WDA_ConvertSirAuthToWDIAuth(WDI_AuthType *AuthType, v_U8_t csrAuthType);
-void WDA_ConvertSirEncToWDIEnc(WDI_EdType *EncrType, v_U8_t csrEncrType);
-#endif
 #ifdef WLAN_FEATURE_PACKET_FILTERING
 static VOS_STATUS WDA_Process8023MulticastListReq (
                                        tWDA_CbContext *pWDA,
@@ -475,7 +468,7 @@ VOS_STATUS WDA_start(v_PVOID_t pVosContext)
                     __func__, status);
       }
       vos_mem_free(wdiStartParam.pConfigBuffer);
-      return status;
+      return VOS_STATUS_E_FAILURE;
    }
    /* WDI_Start() has completed so we can resume our work */
    /* we no longer need the config TLV */
@@ -1478,68 +1471,7 @@ VOS_STATUS WDA_prepareConfigTLV(v_PVOID_t pVosContext,
    tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
                             + sizeof(tHalCfg) + tlvStruct->length) ;
 
-/* QWLAN_HAL_CFG_BTC_STATIC_OPP_BTC_ACTIVE_WLAN_LEN  */
-   tlvStruct->type = QWLAN_HAL_CFG_BTC_STATIC_OPP_WLAN_ACTIVE_WLAN_LEN ;
-   tlvStruct->length = sizeof(tANI_U32);
-   configDataValue = (tANI_U32 *)(tlvStruct + 1);
-   if (wlan_cfgGetInt(pMac, WNI_CFG_BTC_ACTIVE_WLAN_LEN,
-                                            configDataValue ) != eSIR_SUCCESS)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-               "Failed to get value for WNI_CFG_BTC_ACTIVE_WLAN_LEN");
-      goto handle_failure;
-   }
-
-   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
-                            + sizeof(tHalCfg) + tlvStruct->length) ;
-
-/* QWLAN_HAL_CFG_BTC_STATIC_OPP_BTC_ACTIVE_BT_LEN  */
-   tlvStruct->type = QWLAN_HAL_CFG_BTC_STATIC_OPP_WLAN_ACTIVE_BT_LEN ;
-   tlvStruct->length = sizeof(tANI_U32);
-   configDataValue = (tANI_U32 *)(tlvStruct + 1);
-   if (wlan_cfgGetInt(pMac, WNI_CFG_BTC_ACTIVE_BT_LEN,
-                                            configDataValue ) != eSIR_SUCCESS)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-               "Failed to get value for WNI_CFG_BTC_ACTIVE_BT_LEN");
-      goto handle_failure;
-   }
-
-   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
-                            + sizeof(tHalCfg) + tlvStruct->length) ;
-
-/* QWLAN_HAL_CFG_BTC_SAP_STATIC_OPP_WLAN_ACTIVE_WLAN_LEN  */
-   tlvStruct->type = QWLAN_HAL_CFG_BTC_SAP_STATIC_OPP_WLAN_ACTIVE_WLAN_LEN ;
-   tlvStruct->length = sizeof(tANI_U32);
-   configDataValue = (tANI_U32 *)(tlvStruct + 1);
-   if (wlan_cfgGetInt(pMac,  WNI_CFG_BTC_SAP_ACTIVE_WLAN_LEN,
-                                            configDataValue ) != eSIR_SUCCESS)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-               "Failed to get value for WNI_CFG_BTC_SAP_ACTIVE_WLAN_LEN");
-      goto handle_failure;
-   }
-
-   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
-                            + sizeof(tHalCfg) + tlvStruct->length) ;
-
-/* QWLAN_HAL_CFG_BTC_SAP_STATIC_OPP_BTC_ACTIVE_BT_LEN  */
-   tlvStruct->type = QWLAN_HAL_CFG_BTC_SAP_STATIC_OPP_WLAN_ACTIVE_BT_LEN ;
-   tlvStruct->length = sizeof(tANI_U32);
-   configDataValue = (tANI_U32 *)(tlvStruct + 1);
-   if (wlan_cfgGetInt(pMac, WNI_CFG_BTC_SAP_ACTIVE_BT_LEN,
-                                            configDataValue ) != eSIR_SUCCESS)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-               "Failed to get value for WNI_CFG_BTC_SAP_ACTIVE_BT_LEN");
-      goto handle_failure;
-   }
-
-   tlvStruct = (tHalCfg *)( (tANI_U8 *) tlvStruct
-                            + sizeof(tHalCfg) + tlvStruct->length) ;
-
    wdiStartParams->usConfigBufferLen = (tANI_U8 *)tlvStruct - tlvStructStart ;
-
 #ifdef WLAN_DEBUG
    {
       int i;
@@ -2059,6 +1991,7 @@ VOS_STATUS WDA_SuspendDataTx(tWDA_CbContext *pWDA)
 {
    VOS_STATUS status = VOS_STATUS_E_FAILURE;
    tANI_U8 eventIdx = 0;
+   tANI_U8 ucSTAId = 0;
 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                       "%s: Entered " ,__func__);
@@ -2078,7 +2011,8 @@ VOS_STATUS WDA_SuspendDataTx(tWDA_CbContext *pWDA)
       return VOS_STATUS_E_FAILURE;
    }
    /*Indicate TL to suspend transmission for all Sta Id */
-   status = WLANTL_SuspendDataTx(pWDA->pVosContext, NULL,
+   ucSTAId = WLAN_ALL_STA;
+   status = WLANTL_SuspendDataTx(pWDA->pVosContext, &ucSTAId,
                                                 WDA_SuspendDataTxCallback);
    if(status != VOS_STATUS_SUCCESS)
    {
@@ -2116,11 +2050,12 @@ VOS_STATUS WDA_SuspendDataTx(tWDA_CbContext *pWDA)
 VOS_STATUS WDA_ResumeDataTx(tWDA_CbContext *pWDA)
 {
    VOS_STATUS status = VOS_STATUS_SUCCESS;
+   tANI_U8 ucSTAId = 0;
 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                       "%s: Entered " ,__func__);
-
-   status = WLANTL_ResumeDataTx(pWDA->pVosContext, NULL);
+   ucSTAId = WLAN_ALL_STA;
+   status = WLANTL_ResumeDataTx(pWDA->pVosContext, &ucSTAId);
    return status;
 }
 /*
@@ -2959,20 +2894,12 @@ VOS_STATUS WDA_ProcessConfigBssReq(tWDA_CbContext *pWDA,
                                          tAddBssParams* configBssReqParam)
 {
    WDI_Status status = WDI_STATUS_SUCCESS ;
-   WDI_ConfigBSSReqParamsType *wdiConfigBssReqParam;
+   WDI_ConfigBSSReqParamsType *wdiConfigBssReqParam =
+                             (WDI_ConfigBSSReqParamsType *)vos_mem_malloc(
+                                   sizeof(WDI_ConfigBSSReqParamsType)) ;
    tWDA_ReqParams *pWdaParams ;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "------> %s " ,__func__);
-   if (NULL == configBssReqParam)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_FATAL,
-                           "%s: configBssReqParam is NULL", __func__);
-      return VOS_STATUS_E_INVAL;
-   }
-
-   wdiConfigBssReqParam = (WDI_ConfigBSSReqParamsType *)vos_mem_malloc(
-                          sizeof(WDI_ConfigBSSReqParamsType)) ;
-
    if(NULL == wdiConfigBssReqParam) 
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -3275,9 +3202,6 @@ void WDA_DelBSSReqCallback(WDI_DelBSSRspParamsType *wdiDelBssRsp,
                  "%s: Clear STA index form table Fail", __func__);
      VOS_ASSERT(0) ;
    }
-
-   WLANTL_StartForwarding(staIdx,0,0);
-
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
    /* reset the the system role*/
@@ -3383,7 +3307,6 @@ void WDA_DelSTAReqCallback(WDI_DelSTARspParamsType *wdiDelStaRsp,
          VOS_ASSERT(0) ;
       }
       delStaReqParam->staIdx = wdiDelStaRsp->ucSTAIdx ;
-      WLANTL_StartForwarding(delStaReqParam->staIdx,0,0);
    }
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
@@ -3565,7 +3488,7 @@ void WDA_DelSTASelfReqCallback(WDI_Status   wdiStatus,
    tDelStaSelfParams     *delStaSelfParams;
    
    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-             "<------ %s, wdiStatus: %d pWdaParams: %p",
+             "<------ %s, wdiStatus: %d pWdaParams: 0x%x",
               __func__, wdiStatus, pWdaParams); 
 
    if (NULL == pWdaParams)
@@ -3714,6 +3637,8 @@ void WDA_UpdateBSSParams(tWDA_CbContext *pWDA,
    wdiBssParams->ucCurrentOperChannel = wdaBssParams->currentOperChannel ;
    wdiBssParams->ucCurrentExtChannel = wdaBssParams->currentExtChannel ;
    wdiBssParams->bHiddenSSIDEn = wdaBssParams->bHiddenSSIDEn ;
+
+   wdiBssParams->ucRMFEnabled = wdaBssParams->rmfEnabled;
 
    /* copy SSID into WDI structure */
    wdiBssParams->wdiSSID.ucLength = wdaBssParams->ssId.length ;
@@ -4933,6 +4858,7 @@ void WDA_GetStatsReqParamsCallback(
    pGetPEStatsRspParams->msgType = wdiGetStatsRsp->usMsgType;
    pGetPEStatsRspParams->msgLen = sizeof(tAniGetPEStatsRsp) + 
                    (wdiGetStatsRsp->usMsgLen - sizeof(WDI_GetStatsRspParamsType));
+   pGetPEStatsRspParams->msgLen  = wdiGetStatsRsp->usMsgLen + sizeof(tANI_U8);
 
   //Fill the Session Id Properly in PE
    pGetPEStatsRspParams->sessionId = 0;
@@ -5376,8 +5302,6 @@ VOS_STATUS WDA_ProcessAddBASessionReq(tWDA_CbContext *pWDA,
                      (WDI_AddBASessionReqParamsType *)vos_mem_malloc(
                           sizeof(WDI_AddBASessionReqParamsType)) ;
    tWDA_ReqParams *pWdaParams ;
-   WLANTL_STAStateType tlSTAState = 0;
-
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "------> %s " ,__func__);
    if(NULL == wdiAddBASessionReqParam) 
@@ -5429,27 +5353,6 @@ VOS_STATUS WDA_ProcessAddBASessionReq(tWDA_CbContext *pWDA,
    pWdaParams->wdaMsgParam = (void *)pAddBAReqParams ;
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)wdiAddBASessionReqParam ;
-
-   /* In TDLS case, there is a possibility that TL hasn't registered peer yet, but
-      the peer thinks that we already setup TDLS link, and send us ADDBA request packet
-   */
-   if((VOS_STATUS_SUCCESS != WDA_TL_GET_STA_STATE(pWDA->pVosContext, pAddBAReqParams->staIdx, &tlSTAState)) ||
-    ((WLANTL_STA_CONNECTED != tlSTAState) && (WLANTL_STA_AUTHENTICATED != tlSTAState)))
-   {
-       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-        "Peer staIdx %d hasn't established yet(%d). Send ADD BA failure to PE.\n", pAddBAReqParams->staIdx, tlSTAState );
-       status = WDI_STATUS_E_NOT_ALLOWED;
-       pAddBAReqParams->status =
-             CONVERT_WDI2SIR_STATUS(status) ;
-       WDA_SendMsg(pWDA, WDA_ADDBA_RSP, (void *)pAddBAReqParams , 0) ;
-       /*Reset the WDA state to READY */
-       pWDA->wdaState = WDA_READY_STATE;
-       vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
-       vos_mem_free(pWdaParams);
-
-       return CONVERT_WDI2VOS_STATUS(status) ;
-   }
-
    status = WDI_AddBASessionReq(wdiAddBASessionReqParam, 
               (WDI_AddBASessionRspCb)WDA_AddBASessionReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
@@ -5461,8 +5364,6 @@ VOS_STATUS WDA_ProcessAddBASessionReq(tWDA_CbContext *pWDA,
       pAddBAReqParams->status =
             CONVERT_WDI2SIR_STATUS(status) ;
       WDA_SendMsg(pWDA, WDA_ADDBA_RSP, (void *)pAddBAReqParams , 0) ;
-      /*Reset the WDA state to READY */
-      pWDA->wdaState = WDA_READY_STATE;
       vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
       vos_mem_free(pWdaParams);
    }
@@ -6599,65 +6500,16 @@ VOS_STATUS WDA_ProcessAggrAddTSReq(tWDA_CbContext *pWDA,
 }
 #endif
 /*
- * FUNCTION: WDA_EnterImpsRspCallback
+ * FUNCTION: WDA_EnterImpsReqCallback
  * send Enter IMPS RSP back to PE
  */ 
-void WDA_EnterImpsRspCallback(WDI_Status status, void* pUserData)
+void WDA_EnterImpsReqCallback(WDI_Status status, void* pUserData)
 {
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-
+   tWDA_CbContext *pWDA = (tWDA_CbContext *)pUserData ;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-                                          "<------ %s status=%d" ,__func__,status);
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-   vos_mem_free(pWdaParams);
+                                          "<------ %s " ,__func__);
    WDA_SendMsg(pWDA, WDA_ENTER_IMPS_RSP, NULL , status) ;
    return ;
-}
-
-
-/*
- * FUNCTION: WDA_EnterImpsReqCallback
- * Free memory and send Enter IMPS RSP back to PE.
- * Invoked when Enter IMPS REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_EnterImpsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_ENTER_IMPS_RSP, NULL,
-                  CONVERT_WDI2SIR_STATUS(wdiStatus));
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessEnterImpsReq
@@ -6666,51 +6518,13 @@ void WDA_EnterImpsReqCallback(WDI_Status wdiStatus, void* pUserData)
 VOS_STATUS WDA_ProcessEnterImpsReq(tWDA_CbContext *pWDA)
 {
    WDI_Status status = WDI_STATUS_SUCCESS ;
-   WDI_EnterImpsReqParamsType *wdiEnterImpsReqParams;
-   tWDA_ReqParams *pWdaParams;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "------> %s " ,__func__);
-
-
-   wdiEnterImpsReqParams = vos_mem_malloc(sizeof(WDI_EnterImpsReqParamsType));
-   if (NULL == wdiEnterImpsReqParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s: VOS MEM Alloc Failure", __func__);
-      VOS_ASSERT(0);
-      WDA_SendMsg(pWDA, WDA_ENTER_IMPS_RSP, NULL,
-                  CONVERT_WDI2SIR_STATUS(WDI_STATUS_MEM_FAILURE)) ;
-      return VOS_STATUS_E_NOMEM;
-   }
-
-   pWdaParams = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams));
-   if (NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s: VOS MEM Alloc Failure", __func__);
-      VOS_ASSERT(0);
-      vos_mem_free(wdiEnterImpsReqParams);
-      WDA_SendMsg(pWDA, WDA_ENTER_IMPS_RSP, NULL ,
-         CONVERT_WDI2SIR_STATUS(WDI_STATUS_MEM_FAILURE)) ;
-      return VOS_STATUS_E_NOMEM;
-   }
-
-   wdiEnterImpsReqParams->wdiReqStatusCB = WDA_EnterImpsReqCallback;
-   wdiEnterImpsReqParams->pUserData = pWdaParams;
-
-   pWdaParams->wdaWdiApiMsgParam = wdiEnterImpsReqParams;
-   pWdaParams->wdaMsgParam = NULL;
-   pWdaParams->pWdaContext = pWDA;
-
-   status = WDI_EnterImpsReq(wdiEnterImpsReqParams,
-                             (WDI_EnterImpsRspCb)WDA_EnterImpsRspCallback,
-                             pWdaParams);
+   status = WDI_EnterImpsReq((WDI_EnterImpsRspCb)WDA_EnterImpsReqCallback, pWDA);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
               "Failure in Enter IMPS REQ WDI API, free all the memory " );
-      vos_mem_free(wdiEnterImpsReqParams);
-      vos_mem_free(pWdaParams);
       WDA_SendMsg(pWDA, WDA_ENTER_IMPS_RSP, NULL , CONVERT_WDI2SIR_STATUS(status)) ;
    }
    return CONVERT_WDI2VOS_STATUS(status) ;
@@ -6746,10 +6560,10 @@ VOS_STATUS WDA_ProcessExitImpsReq(tWDA_CbContext *pWDA)
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_EnterBmpsRespCallback
+ * FUNCTION: WDA_EnterBmpsReqCallback
  * send Enter BMPS RSP back to PE
  */ 
-void WDA_EnterBmpsRespCallback(WDI_EnterBmpsRspParamsType *pwdiEnterBmpsRsp, void* pUserData)
+void WDA_EnterBmpsReqCallback(WDI_EnterBmpsRspParamsType *pwdiEnterBmpsRsp, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
@@ -6776,41 +6590,6 @@ void WDA_EnterBmpsRespCallback(WDI_EnterBmpsRspParamsType *pwdiEnterBmpsRsp, voi
    WDA_SendMsg(pWDA, WDA_ENTER_BMPS_RSP, (void *)pEnterBmpsRspParams , 0);
 
    return ;
-}
-/*
- * FUNCTION: WDA_EnterBmpsReqCallback
- * Free memory and send Enter BMPS RSP back to PE.
- * Invoked when Enter BMPS REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_EnterBmpsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tEnterBmpsParams *pEnterBmpsRspParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pEnterBmpsRspParams = (tEnterBmpsParams *)pWdaParams->wdaMsgParam;
-   pEnterBmpsRspParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_ENTER_BMPS_RSP, (void *)pEnterBmpsRspParams, 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessEnterBmpsReq
@@ -6860,8 +6639,7 @@ VOS_STATUS WDA_ProcessEnterBmpsReq(tWDA_CbContext *pWDA,
    wdiEnterBmpsReqParams->wdiEnterBmpsInfo.rssiFilterPeriod = (wpt_uint32)pEnterBmpsReqParams->rssiFilterPeriod;
    wdiEnterBmpsReqParams->wdiEnterBmpsInfo.numBeaconPerRssiAverage = (wpt_uint32)pEnterBmpsReqParams->numBeaconPerRssiAverage;
    wdiEnterBmpsReqParams->wdiEnterBmpsInfo.bRssiFilterEnable = (wpt_uint8)pEnterBmpsReqParams->bRssiFilterEnable;
-   wdiEnterBmpsReqParams->wdiReqStatusCB = WDA_EnterBmpsReqCallback;
-   wdiEnterBmpsReqParams->pUserData = pWdaParams;
+   wdiEnterBmpsReqParams->wdiReqStatusCB = NULL;
 
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
@@ -6869,7 +6647,7 @@ VOS_STATUS WDA_ProcessEnterBmpsReq(tWDA_CbContext *pWDA,
    pWdaParams->wdaMsgParam = pEnterBmpsReqParams;
    pWdaParams->pWdaContext = pWDA;
    status = WDI_EnterBmpsReq(wdiEnterBmpsReqParams,
-                    (WDI_EnterBmpsRspCb)WDA_EnterBmpsRespCallback, pWdaParams);
+                    (WDI_EnterBmpsRspCb)WDA_EnterBmpsReqCallback, pWdaParams);
    if (IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -6894,10 +6672,10 @@ static void WDA_SendExitBmpsRsp(tWDA_CbContext *pWDA,
 
 
 /*
- * FUNCTION: WDA_ExitBmpsRespCallback
+ * FUNCTION: WDA_ExitBmpsReqCallback
  * send Exit BMPS RSP back to PE
  */ 
-void WDA_ExitBmpsRespCallback(WDI_ExitBmpsRspParamsType *pwdiExitBmpsRsp, void* pUserData)
+void WDA_ExitBmpsReqCallback(WDI_ExitBmpsRspParamsType *pwdiExitBmpsRsp, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
@@ -6924,41 +6702,6 @@ void WDA_ExitBmpsRespCallback(WDI_ExitBmpsRspParamsType *pwdiExitBmpsRsp, void* 
 
    WDA_SendMsg(pWDA, WDA_EXIT_BMPS_RSP, (void *)pExitBmpsRspParams , 0) ;
    return ;
-}
-/*
- * FUNCTION: WDA_ExitBmpsReqCallback
- * Free memory and send Exit BMPS RSP back to PE.
- * Invoked when Exit BMPS REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_ExitBmpsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tExitBmpsParams *pExitBmpsRspParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pExitBmpsRspParams = (tExitBmpsParams *)pWdaParams->wdaMsgParam;
-   pExitBmpsRspParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_EXIT_BMPS_RSP, (void *)pExitBmpsRspParams, 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessExitBmpsReq
@@ -6995,16 +6738,15 @@ VOS_STATUS WDA_ProcessExitBmpsReq(tWDA_CbContext *pWDA,
 
    wdiExitBmpsReqParams->wdiExitBmpsInfo.bssIdx = pExitBmpsReqParams->bssIdx;
 
-   wdiExitBmpsReqParams->wdiReqStatusCB = WDA_ExitBmpsReqCallback;
-   wdiExitBmpsReqParams->pUserData = pWdaParams;
-
+   wdiExitBmpsReqParams->wdiReqStatusCB = NULL;
+      
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiExitBmpsReqParams;
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pExitBmpsReqParams;
    status = WDI_ExitBmpsReq(wdiExitBmpsReqParams,
-                             (WDI_ExitBmpsRspCb)WDA_ExitBmpsRespCallback, pWdaParams);
+                             (WDI_ExitBmpsRspCb)WDA_ExitBmpsReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -7016,10 +6758,10 @@ VOS_STATUS WDA_ProcessExitBmpsReq(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_EnterUapsdRespCallback
+ * FUNCTION: WDA_EnterUapsdReqCallback
  * send Enter UAPSD RSP back to PE
  */ 
-void WDA_EnterUapsdRespCallback(  WDI_EnterUapsdRspParamsType *pwdiEnterUapsdRspParams, void* pUserData)
+void WDA_EnterUapsdReqCallback(  WDI_EnterUapsdRspParamsType *pwdiEnterUapsdRspParams, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
@@ -7044,41 +6786,6 @@ void WDA_EnterUapsdRespCallback(  WDI_EnterUapsdRspParamsType *pwdiEnterUapsdRsp
    vos_mem_free(pWdaParams) ;
    WDA_SendMsg(pWDA, WDA_ENTER_UAPSD_RSP, (void *)pEnterUapsdRsqParams , 0) ;
    return ;
-}
-/*
- * FUNCTION: WDA_EnterUapsdReqCallback
- * Free memory and send Enter UAPSD RSP back to PE.
- * Invoked when Enter UAPSD REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_EnterUapsdReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tUapsdParams *pEnterUapsdRsqParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pEnterUapsdRsqParams = (tUapsdParams *)pWdaParams->wdaMsgParam;
-   pEnterUapsdRsqParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_ENTER_UAPSD_RSP, (void *)pEnterUapsdRsqParams, 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessEnterUapsdReq
@@ -7128,8 +6835,7 @@ VOS_STATUS WDA_ProcessEnterUapsdReq(tWDA_CbContext *pWDA,
       pEnterUapsdReqParams->voTriggerEnabled;
    wdiEnterUapsdReqParams->wdiEnterUapsdInfo.bssIdx = pEnterUapsdReqParams->bssIdx;
 
-   wdiEnterUapsdReqParams->wdiReqStatusCB = WDA_EnterUapsdReqCallback;
-   wdiEnterUapsdReqParams->pUserData = pWdaParams;
+   wdiEnterUapsdReqParams->wdiReqStatusCB = NULL; 
 
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
@@ -7137,7 +6843,7 @@ VOS_STATUS WDA_ProcessEnterUapsdReq(tWDA_CbContext *pWDA,
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pEnterUapsdReqParams;
    status = WDI_EnterUapsdReq(wdiEnterUapsdReqParams,
-                              (WDI_EnterUapsdRspCb)WDA_EnterUapsdRespCallback, pWdaParams);
+                              (WDI_EnterUapsdRspCb)WDA_EnterUapsdReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -7149,10 +6855,10 @@ VOS_STATUS WDA_ProcessEnterUapsdReq(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_ExitUapsdRespCallback
+ * FUNCTION: WDA_ExitUapsdReqCallback
  * send Exit UAPSD RSP back to PE
  */ 
-void WDA_ExitUapsdRespCallback(WDI_ExitUapsdRspParamsType *pwdiExitRspParam, void* pUserData)
+void WDA_ExitUapsdReqCallback(WDI_ExitUapsdRspParamsType *pwdiExitRspParam, void* pUserData)
 {
 
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
@@ -7180,41 +6886,6 @@ void WDA_ExitUapsdRespCallback(WDI_ExitUapsdRspParamsType *pwdiExitRspParam, voi
 
    WDA_SendMsg(pWDA, WDA_EXIT_UAPSD_RSP, (void *)pExitUapsdRspParams, 0) ;
    return ;
-}
-/*
- * FUNCTION: WDA_ExitUapsdReqCallback
- * Free memory and send Exit UAPSD RSP back to PE.
- * Invoked when Exit UAPSD REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_ExitUapsdReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tExitUapsdParams *pExitUapsdRspParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pExitUapsdRspParams = (tExitUapsdParams *)pWdaParams->wdaMsgParam;
-   pExitUapsdRspParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_EXIT_UAPSD_RSP, (void *)pExitUapsdRspParams, 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessExitUapsdReq
@@ -7250,8 +6921,7 @@ VOS_STATUS WDA_ProcessExitUapsdReq(tWDA_CbContext *pWDA,
    }
 
    wdiExitUapsdReqParams->wdiExitUapsdInfo.bssIdx = pExitUapsdParams->bssIdx;
-   wdiExitUapsdReqParams->wdiReqStatusCB = WDA_ExitUapsdReqCallback;
-   wdiExitUapsdReqParams->pUserData = pWdaParams;
+   wdiExitUapsdReqParams->wdiReqStatusCB = NULL;
 
      /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
@@ -7259,7 +6929,7 @@ VOS_STATUS WDA_ProcessExitUapsdReq(tWDA_CbContext *pWDA,
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pExitUapsdParams;
 
-   status = WDI_ExitUapsdReq(wdiExitUapsdReqParams, (WDI_ExitUapsdRspCb)WDA_ExitUapsdRespCallback, pWdaParams);
+   status = WDI_ExitUapsdReq(wdiExitUapsdReqParams, (WDI_ExitUapsdRspCb)WDA_ExitUapsdReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -7459,56 +7129,18 @@ VOS_STATUS WDA_ProcessSetPwrSaveCfgReq(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status);
 }
 /*
- * FUNCTION: WDA_SetUapsdAcParamsRespCallback
+ * FUNCTION: WDA_SetUapsdAcParamsReqCallback
  * 
  */ 
-void WDA_SetUapsdAcParamsRespCallback(WDI_Status status, void* pUserData)
+void WDA_SetUapsdAcParamsReqCallback(WDI_Status status, void* pUserData)
 {
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ;
-
+   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ; 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "<------ %s " ,__func__);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return ;
-   }
-
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
+   vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
    vos_mem_free(pWdaParams);
 
    return ;
-}
-/*
- * FUNCTION: WDA_SetUapsdAcParamsReqCallback
- * Free memory.
- * Invoked when SetUAPSDACParams REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_SetUapsdAcParamsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_SetUapsdAcParamsReq
@@ -7547,9 +7179,7 @@ VOS_STATUS WDA_SetUapsdAcParamsReq(v_PVOID_t pVosContext, v_U8_t staIdx,
    wdiUapsdParams->wdiUapsdInfo.ucSTAIdx = pUapsdInfo->staidx;
    wdiUapsdParams->wdiUapsdInfo.uSusInterval = pUapsdInfo->susInterval;
    wdiUapsdParams->wdiUapsdInfo.ucUp = pUapsdInfo->up;
-   wdiUapsdParams->wdiReqStatusCB = WDA_SetUapsdAcParamsReqCallback;
-   wdiUapsdParams->pUserData = pWdaParams;
-
+   wdiUapsdParams->wdiReqStatusCB = NULL;
    pWDA = vos_get_context( VOS_MODULE_ID_WDA, pVosContext );
    pWdaParams->pWdaContext = pWDA;
    /* Store param pointer as passed in by caller */
@@ -7557,7 +7187,7 @@ VOS_STATUS WDA_SetUapsdAcParamsReq(v_PVOID_t pVosContext, v_U8_t staIdx,
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)wdiUapsdParams;
    status = WDI_SetUapsdAcParamsReq(wdiUapsdParams, 
-              (WDI_SetUapsdAcParamsCb)WDA_SetUapsdAcParamsRespCallback,
+              (WDI_SetUapsdAcParamsCb)WDA_SetUapsdAcParamsReqCallback,
               pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -7586,10 +7216,10 @@ VOS_STATUS WDA_ClearUapsdAcParamsReq(v_PVOID_t pVosContext, v_U8_t staIdx, wpt_u
    return VOS_STATUS_SUCCESS;
 }
 /*
- * FUNCTION: WDA_UpdateUapsdParamsRespCallback
+ * FUNCTION: WDA_UpdateUapsdParamsReqCallback
  * 
  */ 
-void WDA_UpdateUapsdParamsRespCallback(WDI_Status status, void* pUserData)
+void WDA_UpdateUapsdParamsReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ; 
 
@@ -7610,37 +7240,8 @@ void WDA_UpdateUapsdParamsRespCallback(WDI_Status status, void* pUserData)
 
    //print a msg, nothing else to do
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-           "WDA_UpdateUapsdParamsRespCallback invoked " );
+           "WDA_UpdateUapsdParamsReqCallback invoked " );
    return ;
-}
-/*
- * FUNCTION: WDA_UpdateUapsdParamsReqCallback
- * Free memory.
- * Invoked when UpdateUAPSDParams REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_UpdateUapsdParamsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_UpdateUapsdParamsReq
@@ -7668,8 +7269,6 @@ VOS_STATUS WDA_UpdateUapsdParamsReq(tWDA_CbContext *pWDA,
    wdiUpdateUapsdParams->wdiUpdateUapsdInfo.uMaxSpLen = pUpdateUapsdInfo->maxSpLen;
    wdiUpdateUapsdParams->wdiUpdateUapsdInfo.ucSTAIdx = pUpdateUapsdInfo->staIdx;
    wdiUpdateUapsdParams->wdiUpdateUapsdInfo.ucUapsdACMask = pUpdateUapsdInfo->uapsdACMask;
-   wdiUpdateUapsdParams->wdiReqStatusCB = WDA_UpdateUapsdParamsReqCallback;
-   wdiUpdateUapsdParams->pUserData = pWdaParams;
 
    pWdaParams = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
    if(NULL == pWdaParams)
@@ -7688,7 +7287,7 @@ VOS_STATUS WDA_UpdateUapsdParamsReq(tWDA_CbContext *pWDA,
    pWdaParams->pWdaContext = pWDA;
 
    wstatus = WDI_UpdateUapsdParamsReq(wdiUpdateUapsdParams, 
-                    (WDI_UpdateUapsdParamsCb)WDA_UpdateUapsdParamsRespCallback,
+                    (WDI_UpdateUapsdParamsCb)WDA_UpdateUapsdParamsReqCallback,
                     pWdaParams);
 
    if(IS_WDI_STATUS_FAILURE(wstatus))
@@ -7703,10 +7302,10 @@ VOS_STATUS WDA_UpdateUapsdParamsReq(tWDA_CbContext *pWDA,
    return status;
 }
 /*
- * FUNCTION: WDA_ConfigureRxpFilterRespCallback
+ * FUNCTION: WDA_ConfigureRxpFilterCallback
  * 
  */ 
-void WDA_ConfigureRxpFilterRespCallback(WDI_Status   wdiStatus, void* pUserData)
+void WDA_ConfigureRxpFilterCallback(WDI_Status   wdiStatus, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ; 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
@@ -7729,35 +7328,6 @@ void WDA_ConfigureRxpFilterRespCallback(WDI_Status   wdiStatus, void* pUserData)
    return ;
 }
 /*
- * FUNCTION: WDA_ConfigureRxpFilterReqCallback
- * Free memory.
- * Invoked when ConfigureRXPFilter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_ConfigureRxpFilterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
-/*
  * FUNCTION: WDA_ProcessConfigureRxpFilterReq
  * 
  */ 
@@ -7766,19 +7336,10 @@ VOS_STATUS WDA_ProcessConfigureRxpFilterReq(tWDA_CbContext *pWDA,
 {
    VOS_STATUS status = VOS_STATUS_SUCCESS;
    WDI_Status wstatus;
-   WDI_ConfigureRxpFilterReqParamsType *wdiRxpFilterParams;
-   tWDA_ReqParams *pWdaParams ;
-   /* Sanity Check
-    * This is very unlikely and add assert to collect more info next time */
-   if(NULL == pWlanSuspendParam)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s: pWlanSuspendParam received NULL", __func__);
-      VOS_ASSERT(0) ;
-      return VOS_STATUS_E_FAULT;
-   }
-   wdiRxpFilterParams = (WDI_ConfigureRxpFilterReqParamsType *)vos_mem_malloc(
+   WDI_ConfigureRxpFilterReqParamsType *wdiRxpFilterParams = 
+      (WDI_ConfigureRxpFilterReqParamsType *)vos_mem_malloc(
          sizeof(WDI_ConfigureRxpFilterReqParamsType)) ;
+   tWDA_ReqParams *pWdaParams ;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "------> %s " ,__func__);
    if(NULL == wdiRxpFilterParams) 
@@ -7804,14 +7365,12 @@ VOS_STATUS WDA_ProcessConfigureRxpFilterReq(tWDA_CbContext *pWDA,
    wdiRxpFilterParams->wdiRxpFilterParam.ucSetMcstBcstFilterSetting = 
              pWlanSuspendParam->configuredMcstBcstFilterSetting;
    
-   wdiRxpFilterParams->wdiReqStatusCB = WDA_ConfigureRxpFilterReqCallback;
-   wdiRxpFilterParams->pUserData = pWdaParams;
-
+   wdiRxpFilterParams->wdiReqStatusCB = NULL;
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pWlanSuspendParam;
    pWdaParams->wdaWdiApiMsgParam = (void *)wdiRxpFilterParams;
    wstatus = WDI_ConfigureRxpFilterReq(wdiRxpFilterParams, 
-                      (WDI_ConfigureRxpFilterCb)WDA_ConfigureRxpFilterRespCallback,
+                      (WDI_ConfigureRxpFilterCb)WDA_ConfigureRxpFilterCallback,
                       pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
@@ -7864,6 +7423,42 @@ VOS_STATUS WDA_ProcessWlanSuspendInd(tWDA_CbContext *pWDA,
    vos_mem_free(pWlanSuspendParam);
    return CONVERT_WDI2VOS_STATUS(wdiStatus) ;
 }
+
+#ifdef WLAN_FEATURE_11W
+/*
+ * FUNCTION: WDA_ProcessExcludeUnecryptInd
+ *
+ */
+VOS_STATUS WDA_ProcessExcludeUnecryptInd(tWDA_CbContext *pWDA,
+                              tSirWlanExcludeUnencryptParam *pExclUnencryptParam)
+{
+   WDI_Status wdiStatus;
+   WDI_ExcludeUnencryptIndType wdiExclUnencryptParams;
+   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+                                          "------> %s ", __func__);
+
+   wdiExclUnencryptParams.bExcludeUnencrypt = pExclUnencryptParam->excludeUnencrypt;
+   vos_mem_copy(wdiExclUnencryptParams.bssid, pExclUnencryptParam->bssId,
+                sizeof(tSirMacAddr));
+
+   wdiExclUnencryptParams.wdiReqStatusCB = NULL;
+   wdiExclUnencryptParams.pUserData = pWDA;
+
+   wdiStatus = WDI_ExcludeUnencryptedInd(&wdiExclUnencryptParams);
+   if(WDI_STATUS_PENDING == wdiStatus)
+   {
+      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
+              "Pending received for %s:%d ", __func__, __LINE__ );
+   }
+   else if( WDI_STATUS_SUCCESS_SYNC != wdiStatus )
+   {
+      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
+              "Failure in %s:%d ", __func__, __LINE__ );
+   }
+   vos_mem_free(pExclUnencryptParam);
+   return CONVERT_WDI2VOS_STATUS(wdiStatus) ;
+}
+#endif
 
 /*
  * FUNCTION: WDA_ProcessWlanResumeCallback
@@ -7946,10 +7541,10 @@ VOS_STATUS WDA_ProcessWlanResumeReq(tWDA_CbContext *pWDA,
 }
 
 /*
- * FUNCTION: WDA_SetBeaconFilterRespCallback
+ * FUNCTION: WDA_SetBeaconFilterReqCallback
  * 
  */ 
-void WDA_SetBeaconFilterRespCallback(WDI_Status status, void* pUserData)
+void WDA_SetBeaconFilterReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
@@ -7971,35 +7566,6 @@ void WDA_SetBeaconFilterRespCallback(WDI_Status status, void* pUserData)
     */
 
    return ;
-}
-/*
- * FUNCTION: WDA_SetBeaconFilterReqCallback
- * Free memory.
- * Invoked when SetBeaconFilter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_SetBeaconFilterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_SetBeaconFilterReq
@@ -8053,9 +7619,7 @@ VOS_STATUS WDA_SetBeaconFilterReq(tWDA_CbContext *pWDA,
       filterLength = WDI_BEACON_FILTER_LEN;
    }
    vos_mem_copy(dstPtr, srcPtr, filterLength);
-   wdiBeaconFilterInfo->wdiReqStatusCB = WDA_SetBeaconFilterReqCallback;
-   wdiBeaconFilterInfo->pUserData = pWdaParams;
-
+   wdiBeaconFilterInfo->wdiReqStatusCB = NULL;
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiBeaconFilterInfo;
@@ -8063,7 +7627,7 @@ VOS_STATUS WDA_SetBeaconFilterReq(tWDA_CbContext *pWDA,
    pWdaParams->wdaMsgParam = pBeaconFilterInfo;
 
    status = WDI_SetBeaconFilterReq(wdiBeaconFilterInfo, 
-                                   (WDI_SetBeaconFilterCb)WDA_SetBeaconFilterRespCallback, pWdaParams);
+                                   (WDI_SetBeaconFilterCb)WDA_SetBeaconFilterReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -8075,10 +7639,10 @@ VOS_STATUS WDA_SetBeaconFilterReq(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_RemBeaconFilterRespCallback
+ * FUNCTION: WDA_RemBeaconFilterReqCallback
  * 
  */ 
-void WDA_RemBeaconFilterRespCallback(WDI_Status status, void* pUserData)
+void WDA_RemBeaconFilterReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ; 
 
@@ -8099,37 +7663,8 @@ void WDA_RemBeaconFilterRespCallback(WDI_Status status, void* pUserData)
 
    //print a msg, nothing else to do
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "WDA_RemBeaconFilterRespCallback invoked " );
+              "WDA_RemBeaconFilterReqCallback invoked " );
    return ;
-}
-/*
- * FUNCTION: WDA_RemBeaconFilterReqCallback
- * Free memory.
- * Invoked when RemBeaconFilter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_RemBeaconFilterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
     // TODO: PE does not have this feature for now implemented,
     // but the support for removing beacon filter exists between
@@ -8158,6 +7693,14 @@ VOS_STATUS WDA_RemBeaconFilterReq(tWDA_CbContext *pWDA,
       VOS_ASSERT(0);
       return VOS_STATUS_E_NOMEM;
    }
+   wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucIeCount = 
+      pBeaconFilterInfo->ucIeCount;
+   //Fill structure with info contained in the ucRemIeId
+   vos_mem_copy(wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucRemIeId, 
+                pBeaconFilterInfo->ucRemIeId,
+                wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucIeCount);
+   wdiBeaconFilterInfo->wdiReqStatusCB = NULL;
+
    pWdaParams = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
    if(NULL == pWdaParams)
    {
@@ -8168,15 +7711,6 @@ VOS_STATUS WDA_RemBeaconFilterReq(tWDA_CbContext *pWDA,
       vos_mem_free(pBeaconFilterInfo);
       return VOS_STATUS_E_NOMEM;
    }
-
-   wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucIeCount =
-      pBeaconFilterInfo->ucIeCount;
-   //Fill structure with info contained in the ucRemIeId
-   vos_mem_copy(wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucRemIeId,
-                pBeaconFilterInfo->ucRemIeId,
-                wdiBeaconFilterInfo->wdiBeaconFilterInfo.ucIeCount);
-   wdiBeaconFilterInfo->wdiReqStatusCB = WDA_RemBeaconFilterReqCallback;
-   wdiBeaconFilterInfo->pUserData = pWdaParams;
    
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pBeaconFilterInfo;
@@ -8186,7 +7720,7 @@ VOS_STATUS WDA_RemBeaconFilterReq(tWDA_CbContext *pWDA,
    pWdaParams->pWdaContext = pWDA;
 
    wstatus = WDI_RemBeaconFilterReq(wdiBeaconFilterInfo, 
-                                   (WDI_RemBeaconFilterCb)WDA_RemBeaconFilterRespCallback, pWdaParams);
+                                   (WDI_RemBeaconFilterCb)WDA_RemBeaconFilterReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -8199,10 +7733,10 @@ VOS_STATUS WDA_RemBeaconFilterReq(tWDA_CbContext *pWDA,
    return status;
 }
 /*
- * FUNCTION: WDA_SetRSSIThresholdsRespCallback
+ * FUNCTION: WDA_SetRSSIThresholdsReqCallback
  * 
  */ 
-void WDA_SetRSSIThresholdsRespCallback(WDI_Status status, void* pUserData)
+void WDA_SetRSSIThresholdsReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
@@ -8219,34 +7753,6 @@ void WDA_SetRSSIThresholdsRespCallback(WDI_Status status, void* pUserData)
    vos_mem_free(pWdaParams) ;
 
    return ;
-}
-/*
- * FUNCTION: WDA_SetRSSIThresholdsReqCallback
- * Free memory.
- * Invoked when SetRSSIThresholds REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_SetRSSIThresholdsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_SetRSSIThresholdsReq
@@ -8290,8 +7796,7 @@ VOS_STATUS WDA_SetRSSIThresholdsReq(tpAniSirGlobal pMac, tSirRSSIThresholds *pBm
    wdiRSSIThresholdsInfo->wdiRSSIThresholdsInfo.bRssiThres1PosNotify = pBmpsThresholds->bRssiThres1PosNotify;
    wdiRSSIThresholdsInfo->wdiRSSIThresholdsInfo.bRssiThres2PosNotify = pBmpsThresholds->bRssiThres2PosNotify;
    wdiRSSIThresholdsInfo->wdiRSSIThresholdsInfo.bRssiThres3PosNotify = pBmpsThresholds->bRssiThres3PosNotify;
-   wdiRSSIThresholdsInfo->wdiReqStatusCB = WDA_SetRSSIThresholdsReqCallback;
-   wdiRSSIThresholdsInfo->pUserData = pWdaParams;
+   wdiRSSIThresholdsInfo->wdiReqStatusCB = NULL;
    pVosContext = vos_get_global_context(VOS_MODULE_ID_PE, (void *)pMac);
    pWDA = vos_get_context( VOS_MODULE_ID_WDA, pVosContext );
 
@@ -8301,7 +7806,7 @@ VOS_STATUS WDA_SetRSSIThresholdsReq(tpAniSirGlobal pMac, tSirRSSIThresholds *pBm
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pBmpsThresholds;
    wstatus = WDI_SetRSSIThresholdsReq(wdiRSSIThresholdsInfo, 
-                                     (WDI_SetRSSIThresholdsCb)WDA_SetRSSIThresholdsRespCallback, pWdaParams);
+                                     (WDI_SetRSSIThresholdsCb)WDA_SetRSSIThresholdsReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -8342,8 +7847,7 @@ void WDA_HostOffloadRespCallback(WDI_Status status, void* pUserData)
 }
 /*
  * FUNCTION: WDA_HostOffloadReqCallback
- * Free memory.
- * Invoked when HostOffload REQ failed in WDI and no RSP callback is generated.
+ *
  */
 void WDA_HostOffloadReqCallback(WDI_Status wdiStatus, void* pUserData)
 {
@@ -8474,8 +7978,6 @@ VOS_STATUS WDA_ProcessHostOffloadReq(tWDA_CbContext *pWDA,
          {
             wdiHostOffloadInfo->wdiNsOffloadParams.targetIPv6Addr2Valid = 0;
          }
-         wdiHostOffloadInfo->wdiNsOffloadParams.slotIdx =
-                        pHostOffloadParams->nsOffloadInfo.slotIdx;
          break;
 #endif //WLAN_NS_OFFLOAD
       default:
@@ -8512,10 +8014,10 @@ VOS_STATUS WDA_ProcessHostOffloadReq(tWDA_CbContext *pWDA,
 
 }/*WDA_HostOffloadReq*/
 /*
- * FUNCTION: WDA_KeepAliveRespCallback
+ * FUNCTION: WDA_KeepAliveReqCallback
  * 
  */ 
-void WDA_KeepAliveRespCallback(WDI_Status status, void* pUserData)
+void WDA_KeepAliveReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData ; 
 
@@ -8533,40 +8035,11 @@ void WDA_KeepAliveRespCallback(WDI_Status status, void* pUserData)
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams->wdaMsgParam);
    vos_mem_free(pWdaParams);
-
+   
    //print a msg, nothing else to do
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "WDA_KeepAliveRespCallback invoked " );
+              "WDA_KeepAliveReqCallback invoked " );
    return ;
-}
-/*
- * FUNCTION: WDA_KeepAliveReqCallback
- * Free memory.
- * Invoked when KeepAlive REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_KeepAliveReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessKeepAliveReq
@@ -8638,8 +8111,7 @@ VOS_STATUS WDA_ProcessKeepAliveReq(tWDA_CbContext *pWDA,
                     SIR_MAC_ADDR_LEN,
                     0);
     }
-    wdiKeepAliveInfo->wdiReqStatusCB = WDA_KeepAliveReqCallback;
-    wdiKeepAliveInfo->pUserData = pWdaParams;
+    wdiKeepAliveInfo->wdiReqStatusCB = NULL;
 
     /* Store param pointer as passed in by caller */
     pWdaParams->wdaMsgParam = pKeepAliveParams;
@@ -8670,7 +8142,7 @@ VOS_STATUS WDA_ProcessKeepAliveReq(tWDA_CbContext *pWDA,
               wdiKeepAliveInfo->wdiKeepAliveInfo.ucTimePeriod,
               wdiKeepAliveInfo->wdiKeepAliveInfo.ucPacketType); 
     wstatus = WDI_KeepAliveReq(wdiKeepAliveInfo, 
-                             (WDI_KeepAliveCb)WDA_KeepAliveRespCallback, pWdaParams);
+                             (WDI_KeepAliveCb)WDA_KeepAliveReqCallback, pWdaParams);
 
     if(IS_WDI_STATUS_FAILURE(wstatus))
     {
@@ -8685,10 +8157,10 @@ VOS_STATUS WDA_ProcessKeepAliveReq(tWDA_CbContext *pWDA,
 
 }/*WDA_KeepAliveReq*/
 /*
- * FUNCTION: WDA_WowlAddBcPtrnRespCallback
+ * FUNCTION: WDA_WowlAddBcPtrnReqCallback
  * 
  */ 
-void WDA_WowlAddBcPtrnRespCallback(
+void WDA_WowlAddBcPtrnReqCallback(
                                  WDI_WowlAddBcPtrnRspParamsType *pWdiWowlAddBcstPtrRsp, 
                                  void* pUserData)
 {
@@ -8707,36 +8179,6 @@ void WDA_WowlAddBcPtrnRespCallback(
    vos_mem_free(pWdaParams) ;
    return ;
 }
-/*
- * FUNCTION: WDA_WowlAddBcPtrnReqCallback
- * Free memory.
- * Invoked when WOWLAddBCPTRN REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_WowlAddBcPtrnReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
-
 /*
  * FUNCTION: WDA_ProcessWowlAddBcPtrnReq
  * Request to WDI to add WOWL Bcast pattern
@@ -8805,15 +8247,14 @@ VOS_STATUS WDA_ProcessWowlAddBcPtrnReq(tWDA_CbContext *pWDA,
    vos_mem_copy(wdiWowlAddBcPtrnInfo->wdiWowlAddBcPtrnInfo.bssId,
                          pWowlAddBcPtrnParams->bssId, sizeof(wpt_macAddr));
 
-   wdiWowlAddBcPtrnInfo->wdiReqStatusCB = WDA_WowlAddBcPtrnReqCallback;
-   wdiWowlAddBcPtrnInfo->pUserData = pWdaParams;
+   wdiWowlAddBcPtrnInfo->wdiReqStatusCB = NULL;
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiWowlAddBcPtrnInfo;
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pWowlAddBcPtrnParams;
    wstatus = WDI_WowlAddBcPtrnReq(wdiWowlAddBcPtrnInfo, 
-                                 (WDI_WowlAddBcPtrnCb)WDA_WowlAddBcPtrnRespCallback, pWdaParams);
+                                 (WDI_WowlAddBcPtrnCb)WDA_WowlAddBcPtrnReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -8827,10 +8268,10 @@ VOS_STATUS WDA_ProcessWowlAddBcPtrnReq(tWDA_CbContext *pWDA,
 
 }/*WDA_ProcessWowlAddBcPtrnReq*/
 /*
- * FUNCTION: WDA_WowlDelBcPtrnRespCallback
+ * FUNCTION: WDA_WowlDelBcPtrnReqCallback
  * 
  */ 
-void WDA_WowlDelBcPtrnRespCallback(
+void WDA_WowlDelBcPtrnReqCallback(
                         WDI_WowlDelBcPtrnRspParamsType *pWdiWowlDelBcstPtrRsp, 
                         void* pUserData)
 {
@@ -8848,35 +8289,6 @@ void WDA_WowlDelBcPtrnRespCallback(
    vos_mem_free(pWdaParams->wdaMsgParam);
    vos_mem_free(pWdaParams) ;
    return ;
-}
-/*
- * FUNCTION: WDA_WowlDelBcPtrnReqCallback
- * Free memory.
- * Invoked when WOWLDelBCPTRN REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_WowlDelBcPtrnReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessWowlDelBcPtrnReq
@@ -8915,15 +8327,14 @@ VOS_STATUS WDA_ProcessWowlDelBcPtrnReq(tWDA_CbContext *pWDA,
    vos_mem_copy(wdiWowlDelBcPtrnInfo->wdiWowlDelBcPtrnInfo.bssId,
                          pWowlDelBcPtrnParams->bssId, sizeof(wpt_macAddr));
 
-   wdiWowlDelBcPtrnInfo->wdiReqStatusCB = WDA_WowlDelBcPtrnReqCallback;
-   wdiWowlDelBcPtrnInfo->pUserData = pWdaParams;
+   wdiWowlDelBcPtrnInfo->wdiReqStatusCB = NULL;
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiWowlDelBcPtrnInfo;
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pWowlDelBcPtrnParams;
    wstatus = WDI_WowlDelBcPtrnReq(wdiWowlDelBcPtrnInfo, 
-                                 (WDI_WowlDelBcPtrnCb)WDA_WowlDelBcPtrnRespCallback, pWdaParams);
+                                 (WDI_WowlDelBcPtrnCb)WDA_WowlDelBcPtrnReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -8937,10 +8348,10 @@ VOS_STATUS WDA_ProcessWowlDelBcPtrnReq(tWDA_CbContext *pWDA,
 
 }/*WDA_ProcessWowlDelBcPtrnReq*/
 /*
- * FUNCTION: WDA_WowlEnterRespCallback
+ * FUNCTION: WDA_WowlEnterReqCallback
  * 
  */ 
-void WDA_WowlEnterRespCallback(WDI_WowlEnterRspParamsType *pwdiWowlEnterRspParam, void* pUserData)
+void WDA_WowlEnterReqCallback(WDI_WowlEnterRspParamsType *pwdiWowlEnterRspParam, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
@@ -8966,41 +8377,6 @@ void WDA_WowlEnterRespCallback(WDI_WowlEnterRspParamsType *pwdiWowlEnterRspParam
                (pwdiWowlEnterRspParam->status);
    WDA_SendMsg(pWDA, WDA_WOWL_ENTER_RSP, (void *)pWowlEnterParams , 0) ;
    return ;
-}
-/*
- * FUNCTION: WDA_WowlEnterReqCallback
- * Free memory and send WOWL Enter RSP back to PE.
- * Invoked when WOWL Enter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_WowlEnterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tSirHalWowlEnterParams *pWowlEnterParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pWowlEnterParams =  (tSirHalWowlEnterParams *)pWdaParams->wdaMsgParam;
-   pWowlEnterParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_WOWL_ENTER_RSP, (void *)pWowlEnterParams , 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessWowlEnterReq
@@ -9072,15 +8448,14 @@ VOS_STATUS WDA_ProcessWowlEnterReq(tWDA_CbContext *pWDA,
    wdiWowlEnterInfo->wdiWowlEnterInfo.bssIdx = 
       pWowlEnterParams->bssIdx;
 
-   wdiWowlEnterInfo->wdiReqStatusCB = WDA_WowlEnterReqCallback;
-   wdiWowlEnterInfo->pUserData = pWdaParams;
+   wdiWowlEnterInfo->wdiReqStatusCB = NULL;
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiWowlEnterInfo;
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pWowlEnterParams;
    wstatus = WDI_WowlEnterReq(wdiWowlEnterInfo, 
-                             (WDI_WowlEnterReqCb)WDA_WowlEnterRespCallback, pWdaParams);
+                             (WDI_WowlEnterReqCb)WDA_WowlEnterReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -9094,10 +8469,10 @@ VOS_STATUS WDA_ProcessWowlEnterReq(tWDA_CbContext *pWDA,
 
 }/*WDA_ProcessWowlEnterReq*/
 /*
- * FUNCTION: WDA_WowlExitRespCallback
+ * FUNCTION: WDA_WowlExitReqCallback
  * 
  */ 
-void WDA_WowlExitRespCallback( WDI_WowlExitRspParamsType *pwdiWowlExitRsp, void* pUserData)
+void WDA_WowlExitReqCallback( WDI_WowlExitRspParamsType *pwdiWowlExitRsp, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
@@ -9124,41 +8499,6 @@ void WDA_WowlExitRespCallback( WDI_WowlExitRspParamsType *pwdiWowlExitRsp, void*
                                           "<------ %s " ,__func__);
    WDA_SendMsg(pWDA, WDA_WOWL_EXIT_RSP, (void *)pWowlExitParams, 0) ;
    return ;
-}
-/*
- * FUNCTION: WDA_WowlExitReqCallback
- * Free memory and send WOWL Exit RSP back to PE.
- * Invoked when WOWL Exit REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_WowlExitReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   tSirHalWowlExitParams *pWowlExitParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   pWowlExitParams =  (tSirHalWowlExitParams *)pWdaParams->wdaMsgParam;
-   pWowlExitParams->status = wdiStatus;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams);
-      WDA_SendMsg(pWDA, WDA_WOWL_EXIT_RSP, (void *)pWowlExitParams, 0);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessWowlExitReq
@@ -9195,8 +8535,7 @@ VOS_STATUS WDA_ProcessWowlExitReq(tWDA_CbContext *pWDA,
    wdiWowlExitInfo->wdiWowlExitInfo.bssIdx = 
       pWowlExitParams->bssIdx;
 
-   wdiWowlExitInfo->wdiReqStatusCB = WDA_WowlExitReqCallback;
-   wdiWowlExitInfo->pUserData = pWdaParams;
+   wdiWowlExitInfo->wdiReqStatusCB = NULL;
 
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI */
@@ -9205,7 +8544,7 @@ VOS_STATUS WDA_ProcessWowlExitReq(tWDA_CbContext *pWDA,
    pWdaParams->wdaMsgParam = pWowlExitParams;
 
    wstatus = WDI_WowlExitReq(wdiWowlExitInfo,
-                            (WDI_WowlExitReqCb)WDA_WowlExitRespCallback, pWdaParams);
+                            (WDI_WowlExitReqCb)WDA_WowlExitReqCallback, pWdaParams);
 
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
@@ -9227,19 +8566,6 @@ v_BOOL_t WDA_IsHwFrameTxTranslationCapable(v_PVOID_t pVosGCtx,
                                                       tANI_U8 staIdx)
 {
    return WDI_IsHwFrameTxTranslationCapable(staIdx);
-}
-
-/*
- * FUNCTION: WDA_IsSelfSTA
- * Request to WDI to determine whether a given STAID is self station
- * index.
- */
-v_BOOL_t WDA_IsSelfSTA(v_PVOID_t pVosContext, tANI_U8 ucSTAIdx)
-{
-
-  tWDA_CbContext *pWDA = (tWDA_CbContext *)VOS_GET_WDA_CTXT(pVosContext);
-
-  return WDI_IsSelfSTA(pWDA->pWdiContext,ucSTAIdx);
 }
 /*
  * FUNCTION: WDA_NvDownloadReqCallback
@@ -9440,10 +8766,10 @@ VOS_STATUS WDA_ProcessFlushAcReq(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_BtAmpEventRespCallback
+ * FUNCTION: WDA_BtAmpEventReqCallback
  * 
  */ 
-void WDA_BtAmpEventRespCallback(WDI_Status status, void* pUserData)
+void WDA_BtAmpEventReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData; 
    tWDA_CbContext *pWDA; 
@@ -9474,46 +8800,7 @@ void WDA_BtAmpEventRespCallback(WDI_Status status, void* pUserData)
     */
    return ;
 }
-/*
- * FUNCTION: WDA_BtAmpEventReqCallback
- * Free memory.
- * Invoked when BTAMPEvent REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_BtAmpEventReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tWDA_CbContext *pWDA;
-   WDI_BtAmpEventParamsType *wdiBtAmpEventParam;
 
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext;
-   wdiBtAmpEventParam = (WDI_BtAmpEventParamsType *)pWdaParams->wdaWdiApiMsgParam;
-
-   if(BTAMP_EVENT_CONNECTION_TERMINATED ==
-      wdiBtAmpEventParam->wdiBtAmpEventInfo.ucBtAmpEventType)
-   {
-      pWDA->wdaAmpSessionOn = VOS_FALSE;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
 /*
  * FUNCTION: WDA_ProcessBtAmpEventReq
  * Request to WDI to Update with BT AMP events.
@@ -9546,15 +8833,14 @@ VOS_STATUS WDA_ProcessBtAmpEventReq(tWDA_CbContext *pWDA,
    }
    wdiBtAmpEventParam->wdiBtAmpEventInfo.ucBtAmpEventType = 
       pBtAmpEventParams->btAmpEventType;
-   wdiBtAmpEventParam->wdiReqStatusCB = WDA_BtAmpEventReqCallback;
-   wdiBtAmpEventParam->pUserData = pWdaParams;
+   wdiBtAmpEventParam->wdiReqStatusCB = NULL;
    /* Store BT AMP event pointer, as this will be used for response */
    /* store Params pass it to WDI */
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pBtAmpEventParams;
    pWdaParams->wdaWdiApiMsgParam = wdiBtAmpEventParam;
    status = WDI_BtAmpEventReq(wdiBtAmpEventParam, 
-                              (WDI_BtAmpEventRspCb)WDA_BtAmpEventRespCallback, pWdaParams);
+                              (WDI_BtAmpEventRspCb)WDA_BtAmpEventReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -9582,7 +8868,7 @@ void WDA_FTMCommandReqCallback(void *ftmCmdRspData,
    if((NULL == pWDA) || (NULL == ftmCmdRspData))
    {
       VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                "%s, invalid input %p, %p",__func__,  pWDA, ftmCmdRspData);
+                "%s, invalid input 0x%x, 0x%x",__func__,  pWDA, ftmCmdRspData);
       return;
    }
    /* Release Current FTM Command Request */
@@ -9742,10 +9028,10 @@ VOS_STATUS WDA_ProcessStartOemDataReq(tWDA_CbContext *pWDA,
 }
 #endif /* FEATURE_OEM_DATA_SUPPORT */
 /*
- * FUNCTION: WDA_SetTxPerTrackingRespCallback
+ * FUNCTION: WDA_SetTxPerTrackingReqCallback
  * 
  */ 
-void WDA_SetTxPerTrackingRespCallback(WDI_Status status, void* pUserData)
+void WDA_SetTxPerTrackingReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
@@ -9757,101 +9043,45 @@ void WDA_SetTxPerTrackingRespCallback(WDI_Status status, void* pUserData)
       VOS_ASSERT(0) ;
       return ;
    }
-
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-   vos_mem_free(pWdaParams->wdaMsgParam);
-   vos_mem_free(pWdaParams);
-
-   return ;
-}
-/*
- * FUNCTION: WDA_SetTxPerTrackingReqCallback
- * Free memory.
- * Invoked when SetTXPerTracking REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_SetTxPerTrackingReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
+   
+   if(NULL != pWdaParams->wdaMsgParam)
    {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
+      vos_mem_free(pWdaParams->wdaMsgParam);
    }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
+   if(NULL != pWdaParams->wdaWdiApiMsgParam)
    {
       vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
    }
-
-   return;
+   
+   vos_mem_free(pWdaParams);
+   return ;
 }
 #ifdef WLAN_FEATURE_GTK_OFFLOAD
 /*
- * FUNCTION: WDA_GTKOffloadRespCallback
+ * FUNCTION: WDA_HostOffloadReqCallback
  * 
  */ 
-void WDA_GTKOffloadRespCallback( WDI_GtkOffloadRspParams  *pwdiGtkOffloadRsparams,
+void WDA_GTKOffloadReqCallback( WDI_GtkOffloadRspParams  *pwdiGtkOffloadRsparams, 
                                         void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "<------ %s " ,__func__);
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
 
+   VOS_ASSERT(NULL != pWdaParams);
+   
    vos_mem_free(pWdaParams->wdaMsgParam) ;
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
 
    //print a msg, nothing else to do
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "WDA_GTKOffloadRespCallback invoked " );
+              "WDA_GTKOffloadReqCallback invoked " );
 
    return ;
 }
-/*
- * FUNCTION: WDA_GTKOffloadReqCallback
- * Free memory.
- * Invoked when GTKOffload REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_GTKOffloadReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
 
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
 /*
  * FUNCTION: WDA_ProcessGTKOffloadReq
  * Request to WDI to set the filter to minimize unnecessary host wakeup due 
@@ -9903,8 +9133,7 @@ VOS_STATUS WDA_ProcessGTKOffloadReq(tWDA_CbContext *pWDA,
    vos_mem_copy(&(wdiGtkOffloadReqMsg->gtkOffloadReqParams.ullKeyReplayCounter), 
                 &(pGtkOffloadParams->ullKeyReplayCounter), sizeof(v_U64_t));
 
-   wdiGtkOffloadReqMsg->wdiReqStatusCB = WDA_GTKOffloadReqCallback;
-   wdiGtkOffloadReqMsg->pUserData = pWdaParams;
+   wdiGtkOffloadReqMsg->wdiReqStatusCB = NULL;
 
 
    /* Store Params pass it to WDI */
@@ -9913,7 +9142,7 @@ VOS_STATUS WDA_ProcessGTKOffloadReq(tWDA_CbContext *pWDA,
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pGtkOffloadParams;
 
-   status = WDI_GTKOffloadReq(wdiGtkOffloadReqMsg, (WDI_GtkOffloadCb)WDA_GTKOffloadRespCallback, pWdaParams);
+   status = WDI_GTKOffloadReq(wdiGtkOffloadReqMsg, (WDI_GtkOffloadCb)WDA_GTKOffloadReqCallback, pWdaParams);
 
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -9928,27 +9157,22 @@ VOS_STATUS WDA_ProcessGTKOffloadReq(tWDA_CbContext *pWDA,
 }
 
 /*
- * FUNCTION: WDA_GtkOffloadGetInfoRespCallback
+ * FUNCTION: WDA_GtkOffloadGetInfoCallback 
  * 
  */ 
-void WDA_GtkOffloadGetInfoRespCallback( WDI_GtkOffloadGetInfoRspParams *pwdiGtkOffloadGetInfoRsparams,
+void WDA_GtkOffloadGetInfoCallback( WDI_GtkOffloadGetInfoRspParams *pwdiGtkOffloadGetInfoRsparams, 
                                     void * pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    tWDA_CbContext *pWDA;
    tpSirGtkOffloadGetInfoRspParams pGtkOffloadGetInfoReq;
-   tpSirGtkOffloadGetInfoRspParams pGtkOffloadGetInfoRsp = vos_mem_malloc(sizeof(tSirGtkOffloadGetInfoRspParams)) ;
+   tpSirGtkOffloadGetInfoRspParams pGtkOffloadGetInfoRsp = vos_mem_malloc(sizeof(tpSirGtkOffloadGetInfoRspParams)) ;
    vos_msg_t vosMsg;
 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "<------ %s " ,__func__);
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
+
+   VOS_ASSERT(NULL != pWdaParams);
 
    pWDA = (tWDA_CbContext *)pWdaParams->pWdaContext ;
    pGtkOffloadGetInfoReq = (tpSirGtkOffloadGetInfoRspParams)pWdaParams->wdaMsgParam;
@@ -9958,7 +9182,7 @@ void WDA_GtkOffloadGetInfoRespCallback( WDI_GtkOffloadGetInfoRspParams *pwdiGtkO
 
    /* Message Header */
    pGtkOffloadGetInfoRsp->mesgType = eWNI_PMC_GTK_OFFLOAD_GETINFO_RSP;
-   pGtkOffloadGetInfoRsp->mesgLen = sizeof(tSirGtkOffloadGetInfoRspParams);
+   pGtkOffloadGetInfoRsp->mesgLen = sizeof(tpSirGtkOffloadGetInfoRspParams);
 
    pGtkOffloadGetInfoRsp->ulStatus            = pwdiGtkOffloadGetInfoRsparams->ulStatus;
    pGtkOffloadGetInfoRsp->ullKeyReplayCounter = pwdiGtkOffloadGetInfoRsparams->ullKeyReplayCounter;
@@ -9983,44 +9207,6 @@ void WDA_GtkOffloadGetInfoRespCallback( WDI_GtkOffloadGetInfoRspParams *pwdiGtkO
    vos_mem_free(pWdaParams->wdaMsgParam) ;
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
-
-   return;
-}
-/*
- * FUNCTION: WDA_GtkOffloadGetInfoReqCallback
- * Free memory and send RSP back to SME.
- * Invoked when GTKOffloadGetInfo REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_GtkOffloadGetInfoReqCallback(WDI_Status wdiStatus, void * pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   vos_msg_t vosMsg;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   /* VOS message wrapper */
-   vosMsg.type = eWNI_PMC_GTK_OFFLOAD_GETINFO_RSP;
-   vosMsg.bodyptr = NULL;
-   vosMsg.bodyval = 0;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-      vos_mq_post_message(VOS_MQ_ID_SME, (vos_msg_t*)&vosMsg);
-   }
-
-   return;
 }
 #endif
 
@@ -10064,8 +9250,7 @@ VOS_STATUS WDA_ProcessSetTxPerTrackingReq(tWDA_CbContext *pWDA, tSirTxPerTrackin
       pTxPerTrackingParams->ucTxPerTrackingRatio;
    pwdiSetTxPerTrackingReqParams->wdiTxPerTrackingParam.uTxPerTrackingWatermark = 
       pTxPerTrackingParams->uTxPerTrackingWatermark;
-   pwdiSetTxPerTrackingReqParams->wdiReqStatusCB = WDA_SetTxPerTrackingReqCallback;
-   pwdiSetTxPerTrackingReqParams->pUserData = pWdaParams;
+   pwdiSetTxPerTrackingReqParams->wdiReqStatusCB = NULL;
    /* Store param pointer as passed in by caller */
    /* store Params pass it to WDI 
       Ideally, the memory allocated here will be free at WDA_SetTxPerTrackingReqCallback */
@@ -10073,7 +9258,7 @@ VOS_STATUS WDA_ProcessSetTxPerTrackingReq(tWDA_CbContext *pWDA, tSirTxPerTrackin
    pWdaParams->pWdaContext = pWDA;
    pWdaParams->wdaMsgParam = pTxPerTrackingParams;
    wstatus = WDI_SetTxPerTrackingReq(pwdiSetTxPerTrackingReqParams, 
-                                    (WDI_SetTxPerTrackingRspCb)WDA_SetTxPerTrackingRespCallback, pWdaParams);
+                                    (WDI_SetTxPerTrackingRspCb)WDA_SetTxPerTrackingReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(wstatus))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
@@ -10135,22 +9320,7 @@ VOS_STATUS WDA_HALDumpCmdReq(tpAniSirGlobal   pMac, tANI_U32  cmd,
    VOS_STATUS vStatus;
    pVosContext = (pVosContextType)vos_get_global_context(VOS_MODULE_ID_PE,
                                                            (void *)pMac);
-   if(pVosContext)
-   {
-      if (pVosContext->isLogpInProgress)
-      {
-         VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_FATAL,
-                                "%s:LOGP in Progress. Ignore!!!", __func__);
-         return VOS_STATUS_E_BUSY;
-      }
-   }
-   else
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                          "%s: VOS Context Null", __func__);
-      return VOS_STATUS_E_RESOURCES;
-   }
-
+   
    pWdaParams = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
    if(NULL == pWdaParams)
    {
@@ -10233,8 +9403,7 @@ VOS_STATUS WDA_ProcessGTKOffloadGetInfoReq(tWDA_CbContext *pWDA,
       return VOS_STATUS_E_NOMEM;
    }
 
-   pwdiGtkOffloadGetInfoReqMsg->wdiReqStatusCB = WDA_GtkOffloadGetInfoReqCallback;
-   pwdiGtkOffloadGetInfoReqMsg->pUserData = pWdaParams;
+   pwdiGtkOffloadGetInfoReqMsg->wdiReqStatusCB = NULL;
 
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiGtkOffloadGetInfoReqMsg;
@@ -10245,7 +9414,7 @@ VOS_STATUS WDA_ProcessGTKOffloadGetInfoReq(tWDA_CbContext *pWDA,
    vos_mem_copy(pwdiGtkOffloadGetInfoReqMsg->WDI_GtkOffloadGetInfoReqParams.bssId,
              pGtkOffloadGetInfoRsp->bssId, sizeof (wpt_macAddr));
 
-   status = WDI_GTKOffloadGetInfoReq(pwdiGtkOffloadGetInfoReqMsg, (WDI_GtkOffloadGetInfoCb)WDA_GtkOffloadGetInfoRespCallback, pWdaParams);
+   status = WDI_GTKOffloadGetInfoReq(pwdiGtkOffloadGetInfoReqMsg, (WDI_GtkOffloadGetInfoCb)WDA_GtkOffloadGetInfoCallback, pWdaParams);
 
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -10310,7 +9479,7 @@ VOS_STATUS WDA_TxComplete( v_PVOID_t pVosContext, vos_pkt_t *pData,
       else
       {
          VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_WARN,
-                           "%s:packet (%p) is already freed",
+                           "%s:packet (0x%X) is already freed", 
                            __func__, pData);
          //Return from here since we reaching here because the packet already timeout
          return status;
@@ -10356,14 +9525,14 @@ VOS_STATUS WDA_TxPacket(tWDA_CbContext *pWDA,
    if((NULL == pWDA)||(NULL == pFrmBuf)) 
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s:pWDA %p or pFrmBuf %p is NULL",
+                           "%s:pWDA %x or pFrmBuf %x is NULL", 
                            __func__,pWDA,pFrmBuf); 
       VOS_ASSERT(0);
       return VOS_STATUS_E_FAILURE;
    }
    
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO_HIGH, 
-               "Tx Mgmt Frame Subtype: %d alloc(%p)\n", pFc->subType, pFrmBuf);
+               "Tx Mgmt Frame Subtype: %d alloc(%x)\n", pFc->subType, pFrmBuf);
    pMac = (tpAniSirGlobal )VOS_GET_MAC_CTXT(pWDA->pVosContext);
    if(NULL == pMac)
    {
@@ -10544,16 +9713,6 @@ VOS_STATUS WDA_TxPacket(tWDA_CbContext *pWDA,
       }
       status = VOS_STATUS_E_FAILURE;
    }
-#ifdef WLAN_DUMP_MGMTFRAMES
-   if (VOS_IS_STATUS_SUCCESS(status))
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                      "%s() TX packet : SubType %d", __func__,pFc->subType);
-      VOS_TRACE_HEX_DUMP( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                          pData, frmLen);
-   }
-#endif
-
    return status;
 }
 /*
@@ -11092,13 +10251,6 @@ VOS_STATUS WDA_McProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
          break;
       }
 #endif // FEATURE_WLAN_SCAN_PNO
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-      case WDA_ROAM_SCAN_OFFLOAD_REQ:
-      {
-         WDA_ProcessRoamScanOffloadReq(pWDA, (tSirRoamOffloadScanReq *)pMsg->bodyptr);
-         break;
-      }
-#endif
       case WDA_SET_TX_PER_TRACKING_REQ:
       {
          WDA_ProcessSetTxPerTrackingReq(pWDA, (tSirTxPerTrackingParam *)pMsg->bodyptr);
@@ -11173,6 +10325,13 @@ VOS_STATUS WDA_McProcessMsg( v_CONTEXT_t pVosContext, vos_msg_t *pMsg )
                    VOS_TRACE(VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
                                             " 11AC Feature is Not Supported \n");
           break;
+      }
+#endif
+#ifdef WLAN_FEATURE_11W
+      case WDA_EXCLUDE_UNENCRYPTED_IND:
+      {
+         WDA_ProcessExcludeUnecryptInd(pWDA, (tSirWlanExcludeUnencryptParam *)pMsg->bodyptr);
+         break;
       }
 #endif
       default:
@@ -11480,11 +10639,7 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
       case WDI_PREF_NETWORK_FOUND_IND:
       {
          vos_msg_t vosMsg;
-         v_U32_t size = sizeof(tSirPrefNetworkFoundInd) +
-             wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.frameLength;
-         tSirPrefNetworkFoundInd *pPrefNetworkFoundInd =
-             (tSirPrefNetworkFoundInd *)vos_mem_malloc(size);
-
+         tSirPrefNetworkFoundInd *pPrefNetworkFoundInd = (tSirPrefNetworkFoundInd *)vos_mem_malloc(sizeof(tSirPrefNetworkFoundInd));
          VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                               "Received WDI_PREF_NETWORK_FOUND_IND from WDI");
          if (NULL == pPrefNetworkFoundInd)
@@ -11492,19 +10647,11 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
             VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
                        "Memory allocation failure, "
                        "WDI_PREF_NETWORK_FOUND_IND not forwarded");
-            if (NULL !=
-                wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData)
-            {
-                wpalMemoryFree(
-                 wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData
-                );
-                wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData = NULL;
-            }
             break;
          }
          /* Message Header */
          pPrefNetworkFoundInd->mesgType = eWNI_SME_PREF_NETWORK_FOUND_IND;
-         pPrefNetworkFoundInd->mesgLen = size;
+         pPrefNetworkFoundInd->mesgLen = sizeof(*pPrefNetworkFoundInd);
 
          /* Info from WDI Indication */ 
          pPrefNetworkFoundInd->ssId.length = 
@@ -11513,21 +10660,6 @@ void WDA_lowLevelIndCallback(WDI_LowLevelIndType *wdiLowLevelInd,
          vos_mem_copy( pPrefNetworkFoundInd->ssId.ssId, 
                   wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.ssId.sSSID, 
                   pPrefNetworkFoundInd->ssId.length);
-         if (NULL !=
-             wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData)
-         {
-            pPrefNetworkFoundInd->frameLength =
-                wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.frameLength;
-            vos_mem_copy( pPrefNetworkFoundInd->data,
-                wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData,
-                pPrefNetworkFoundInd->frameLength);
-            wpalMemoryFree(wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData);
-            wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.pData = NULL;
-         }
-         else
-         {
-            pPrefNetworkFoundInd->frameLength = 0;
-         }
          pPrefNetworkFoundInd ->rssi = wdiLowLevelInd->wdiIndicationData.wdiPrefNetworkFoundInd.rssi; 
          /* VOS message wrapper */
          vosMsg.type = eWNI_SME_PREF_NETWORK_FOUND_IND;
@@ -12137,10 +11269,9 @@ void WDA_ProcessTxCompleteTimeOutInd(tWDA_CbContext* pWDA)
 /*
  * WDA Set REG Domain to VOS NV
  */
-eHalStatus WDA_SetRegDomain(void * clientCtxt, v_REGDOMAIN_t regId,
-                                                tAniBool sendRegHint)
+eHalStatus WDA_SetRegDomain(void * clientCtxt, v_REGDOMAIN_t regId)
 {
-   if(VOS_STATUS_SUCCESS != vos_nv_setRegDomain(clientCtxt, regId, sendRegHint))
+   if(VOS_STATUS_SUCCESS != vos_nv_setRegDomain(clientCtxt, regId))
    {
       return eHAL_STATUS_INVALID_PARAMETER;
    }
@@ -12149,126 +11280,66 @@ eHalStatus WDA_SetRegDomain(void * clientCtxt, v_REGDOMAIN_t regId,
 
 #ifdef FEATURE_WLAN_SCAN_PNO
 /*
- * FUNCTION: WDA_PNOScanRespCallback
+ * FUNCTION: WDA_PNOScanReqCallback
  * 
  */ 
-void WDA_PNOScanRespCallback(WDI_Status status, void* pUserData)
+void WDA_PNOScanReqCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData; 
-   tSirPNOScanReq *pPNOScanReqParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d",__func__, status);
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-              "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0) ;
-      return ;
-   }
-
-   pPNOScanReqParams = (tSirPNOScanReq *)pWdaParams->wdaMsgParam;
-   if(pPNOScanReqParams->statusCallback)
-   {
-      pPNOScanReqParams->statusCallback(pPNOScanReqParams->callbackContext,
-                          (status == WDI_STATUS_SUCCESS) ?
-                           VOS_STATUS_SUCCESS : VOS_STATUS_E_FAILURE);
-   }
-
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-   vos_mem_free(pWdaParams->wdaMsgParam);
-   vos_mem_free(pWdaParams);
-
-   return ;
-}
-/*
- * FUNCTION: WDA_PNOScanReqCallback
- * Free memory.
- * Invoked when PNOScan REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_PNOScanReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   tSirPNOScanReq *pPNOScanReqParams;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      pPNOScanReqParams = (tSirPNOScanReq *)pWdaParams->wdaMsgParam;
-      if(pPNOScanReqParams->statusCallback)
-      {
-         pPNOScanReqParams->statusCallback(pPNOScanReqParams->callbackContext,
-                                           VOS_STATUS_E_FAILURE);
-      }
-
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
-/*
- * FUNCTION: WDA_UpdateScanParamsRespCallback
- *
- */
-void WDA_UpdateScanParamsRespCallback(WDI_Status status, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
                                           "<------ %s " ,__func__);
-   if(NULL == pWdaParams)
+    if(NULL == pWdaParams)
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
               "%s: pWdaParams received NULL", __func__);
       VOS_ASSERT(0) ;
       return ;
    }
+   if( pWdaParams != NULL )
+   {
+      if( pWdaParams->wdaWdiApiMsgParam != NULL )
+      {
+         vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
+      }
+      if( pWdaParams->wdaMsgParam != NULL)
+      {
+         vos_mem_free(pWdaParams->wdaMsgParam);
+      }
 
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-   vos_mem_free(pWdaParams->wdaMsgParam);
-   vos_mem_free(pWdaParams);
+      vos_mem_free(pWdaParams) ;
+   }
 
    return ;
 }
 /*
- * FUNCTION: WDA_UpdateScanParamsReqCallback
- * Free memory.
- * Invoked when UpdateScanParams REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_UpdateScanParamsReqCallback(WDI_Status wdiStatus, void* pUserData)
+ * FUNCTION: WDA_UpdateScanParamsCallback
+ * 
+ */ 
+void WDA_UpdateScanParamsCallback(WDI_Status status, void* pUserData)
 {
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
+   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData; 
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
+                                          "<------ %s " ,__func__);
+    if(NULL == pWdaParams)
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
+              "%s: pWdaParams received NULL", __func__);
+      VOS_ASSERT(0) ;
+      return ;
    }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
+   if( pWdaParams != NULL )
    {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
+      if( pWdaParams->wdaWdiApiMsgParam != NULL )
+      {
+         vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
+      }
+      if( pWdaParams->wdaMsgParam != NULL)
+      {
+         vos_mem_free(pWdaParams->wdaMsgParam);
+      }
+      vos_mem_free(pWdaParams) ;
    }
-
-   return;
+   return ;
 }
 /*
  * FUNCTION: WDA_ProcessSetPreferredNetworkList
@@ -12332,8 +11403,7 @@ VOS_STATUS WDA_ProcessSetPrefNetworkReq(tWDA_CbContext *pWDA,
    vos_mem_copy( &pwdiPNOScanReqInfo->wdiPNOScanInfo.a5GProbeTemplate,
                 pPNOScanReqParams->p5GProbeTemplate,
                 pwdiPNOScanReqInfo->wdiPNOScanInfo.us5GProbeSize);
-   pwdiPNOScanReqInfo->wdiReqStatusCB = WDA_PNOScanReqCallback;
-   pwdiPNOScanReqInfo->pUserData = pWdaParams;
+   pwdiPNOScanReqInfo->wdiReqStatusCB = NULL;
 
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiPNOScanReqInfo;
@@ -12341,17 +11411,11 @@ VOS_STATUS WDA_ProcessSetPrefNetworkReq(tWDA_CbContext *pWDA,
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pPNOScanReqParams;
    status = WDI_SetPreferredNetworkReq(pwdiPNOScanReqInfo, 
-                           (WDI_PNOScanCb)WDA_PNOScanRespCallback, pWdaParams);
+                           (WDI_PNOScanCb)WDA_PNOScanReqCallback, pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
               "Failure in Set PNO REQ WDI API, free all the memory " );
-      if(pPNOScanReqParams->statusCallback)
-      {
-         pPNOScanReqParams->statusCallback(pPNOScanReqParams->callbackContext,
-                                           VOS_STATUS_E_FAILURE);
-      }
-
       vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
       vos_mem_free(pWdaParams->wdaMsgParam);
       pWdaParams->wdaWdiApiMsgParam = NULL;
@@ -12359,247 +11423,11 @@ VOS_STATUS WDA_ProcessSetPrefNetworkReq(tWDA_CbContext *pWDA,
    }
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
-
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-
-void WDA_ConvertSirAuthToWDIAuth(WDI_AuthType *AuthType, v_U8_t csrAuthType)
-{
-   /*Convert the CSR Auth types to WDI Auth types */
-   switch (csrAuthType)
-   {
-      case eCSR_AUTH_TYPE_OPEN_SYSTEM:
-           *AuthType = eWDA_AUTH_TYPE_OPEN_SYSTEM;
-           break;
-#ifdef FEATURE_WLAN_CCX
-      case eCSR_AUTH_TYPE_CCKM_WPA:
-           *AuthType = eWDA_AUTH_TYPE_CCKM_WPA;
-           break;
-#endif
-      case eCSR_AUTH_TYPE_WPA:
-           *AuthType = eWDA_AUTH_TYPE_WPA;
-           break;
-      case eCSR_AUTH_TYPE_WPA_PSK:
-           *AuthType = eWDA_AUTH_TYPE_WPA_PSK;
-           break;
-#ifdef FEATURE_WLAN_CCX
-      case eCSR_AUTH_TYPE_CCKM_RSN:
-           *AuthType = eWDA_AUTH_TYPE_CCKM_RSN;
-           break;
-#endif
-      case eCSR_AUTH_TYPE_RSN:
-           *AuthType = eWDA_AUTH_TYPE_RSN;
-           break;
-      case eCSR_AUTH_TYPE_RSN_PSK:
-           *AuthType = eWDA_AUTH_TYPE_RSN_PSK;
-           break;
-#if defined WLAN_FEATURE_VOWIFI_11R
-      case eCSR_AUTH_TYPE_FT_RSN:
-           *AuthType = eWDA_AUTH_TYPE_FT_RSN;
-           break;
-      case eCSR_AUTH_TYPE_FT_RSN_PSK:
-           *AuthType = eWDA_AUTH_TYPE_FT_RSN_PSK;
-           break;
-#endif
-#ifdef FEATURE_WLAN_WAPI
-      case eCSR_AUTH_TYPE_WAPI_WAI_CERTIFICATE:
-           *AuthType = eWDA_AUTH_TYPE_WAPI_WAI_CERTIFICATE;
-           break;
-      case eCSR_AUTH_TYPE_WAPI_WAI_PSK:
-           *AuthType = eWDA_AUTH_TYPE_WAPI_WAI_PSK;
-           break;
-#endif /* FEATURE_WLAN_WAPI */
-      case eCSR_AUTH_TYPE_SHARED_KEY:
-      case eCSR_AUTH_TYPE_AUTOSWITCH:
-           *AuthType = eWDA_AUTH_TYPE_OPEN_SYSTEM;
-           break;
-#if 0
-      case eCSR_AUTH_TYPE_SHARED_KEY:
-           *AuthType = eWDA_AUTH_TYPE_SHARED_KEY;
-           break;
-      case eCSR_AUTH_TYPE_AUTOSWITCH:
-           *AuthType = eWDA_AUTH_TYPE_AUTOSWITCH;
-#endif
-      default:
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: Unknown Auth Type", __func__);
-           break;
-   }
-}
-void WDA_ConvertSirEncToWDIEnc(WDI_EdType *EncrType, v_U8_t csrEncrType)
-{
-   switch (csrEncrType)
-   {
-      case eCSR_ENCRYPT_TYPE_NONE:
-           *EncrType = WDI_ED_NONE;
-           break;
-      case eCSR_ENCRYPT_TYPE_WEP40_STATICKEY:
-      case eCSR_ENCRYPT_TYPE_WEP40:
-           *EncrType = WDI_ED_WEP40;
-           break;
-      case eCSR_ENCRYPT_TYPE_WEP104:
-      case eCSR_ENCRYPT_TYPE_WEP104_STATICKEY:
-           *EncrType = WDI_ED_WEP104;
-           break;
-      case eCSR_ENCRYPT_TYPE_TKIP:
-           *EncrType = WDI_ED_TKIP;
-           break;
-      case eCSR_ENCRYPT_TYPE_AES:
-           *EncrType = WDI_ED_CCMP;
-           break;
-#ifdef WLAN_FEATURE_11W
-      case eCSR_ENCRYPT_TYPE_AES_CMAC:
-           *EncrType = WDI_ED_AES_128_CMAC;
-           break;
-#endif
-#ifdef FEATURE_WLAN_WAPI
-      case eCSR_ENCRYPT_TYPE_WPI:
-           *EncrType = WDI_ED_WPI;
-           break;
-#endif
-      case eCSR_ENCRYPT_TYPE_ANY:
-           *EncrType = WDI_ED_ANY;
-           break;
-
-      default:
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: Unknown Encryption Type", __func__);
-           break;
-   }
-}
-
 /*
- * FUNCTION: WDA_ProcessRoamScanOffloadReq
- * Request to WDI to set Roam Offload Scan
- */
-VOS_STATUS WDA_ProcessRoamScanOffloadReq(tWDA_CbContext *pWDA,
-                                                  tSirRoamOffloadScanReq *pRoamOffloadScanReqParams)
-{
-   WDI_Status status;
-   WDI_RoamScanOffloadReqParamsType *pwdiRoamScanOffloadReqParams =
-   (WDI_RoamScanOffloadReqParamsType *)vos_mem_malloc(sizeof(WDI_RoamScanOffloadReqParamsType));
-   tWDA_ReqParams *pWdaParams ;
-   v_U8_t csrAuthType;
-   WDI_RoamNetworkType *pwdiRoamNetworkType;
-   WDI_RoamOffloadScanInfo *pwdiRoamOffloadScanInfo;
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "------> %s " ,__func__);
-   if (NULL == pwdiRoamScanOffloadReqParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-                           "%s: VOS MEM Alloc Failure", __func__);
-      VOS_ASSERT(0);
-      return VOS_STATUS_E_NOMEM;
-   }
-   pWdaParams = (tWDA_ReqParams *)vos_mem_malloc(sizeof(tWDA_ReqParams)) ;
-   if (NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                           "%s: VOS MEM Alloc Failure", __func__);
-      VOS_ASSERT(0);
-      vos_mem_free(pwdiRoamScanOffloadReqParams);
-      return VOS_STATUS_E_NOMEM;
-   }
-
-   pwdiRoamNetworkType =
-   &pwdiRoamScanOffloadReqParams->wdiRoamOffloadScanInfo.ConnectedNetwork;
-   pwdiRoamOffloadScanInfo =
-   &pwdiRoamScanOffloadReqParams->wdiRoamOffloadScanInfo;
-   vos_mem_zero (pwdiRoamScanOffloadReqParams,sizeof(WDI_RoamScanOffloadReqParamsType));
-   csrAuthType = pRoamOffloadScanReqParams->ConnectedNetwork.authentication;
-   pwdiRoamOffloadScanInfo->RoamScanOffloadEnabled =
-          pRoamOffloadScanReqParams->RoamScanOffloadEnabled;
-   vos_mem_copy(pwdiRoamNetworkType->currAPbssid,
-                pRoamOffloadScanReqParams->ConnectedNetwork.currAPbssid,
-                sizeof(pwdiRoamNetworkType->currAPbssid));
-   WDA_ConvertSirAuthToWDIAuth(&pwdiRoamNetworkType->authentication,
-                                csrAuthType);
-   WDA_ConvertSirEncToWDIEnc(&pwdiRoamNetworkType->encryption,
-       pRoamOffloadScanReqParams->ConnectedNetwork.encryption);
-   WDA_ConvertSirEncToWDIEnc(&pwdiRoamNetworkType->mcencryption,
-       pRoamOffloadScanReqParams->ConnectedNetwork.mcencryption);
-   pwdiRoamOffloadScanInfo->LookupThreshold =
-           pRoamOffloadScanReqParams->LookupThreshold ;
-   pwdiRoamOffloadScanInfo->RoamRssiDiff =
-           pRoamOffloadScanReqParams->RoamRssiDiff ;
-   pwdiRoamOffloadScanInfo->Command =
-           pRoamOffloadScanReqParams->Command ;
-   pwdiRoamOffloadScanInfo->StartScanReason =
-           pRoamOffloadScanReqParams->StartScanReason ;
-   pwdiRoamOffloadScanInfo->NeighborScanTimerPeriod =
-           pRoamOffloadScanReqParams->NeighborScanTimerPeriod ;
-   pwdiRoamOffloadScanInfo->NeighborRoamScanRefreshPeriod =
-           pRoamOffloadScanReqParams->NeighborRoamScanRefreshPeriod ;
-   pwdiRoamOffloadScanInfo->NeighborScanChannelMinTime =
-           pRoamOffloadScanReqParams->NeighborScanChannelMinTime ;
-   pwdiRoamOffloadScanInfo->NeighborScanChannelMaxTime =
-           pRoamOffloadScanReqParams->NeighborScanChannelMaxTime ;
-   pwdiRoamOffloadScanInfo->EmptyRefreshScanPeriod =
-           pRoamOffloadScanReqParams->EmptyRefreshScanPeriod ;
-   pwdiRoamOffloadScanInfo->IsCCXEnabled =
-           pRoamOffloadScanReqParams->IsCCXEnabled ;
-   vos_mem_copy(&pwdiRoamNetworkType->ssId.sSSID,
-                &pRoamOffloadScanReqParams->ConnectedNetwork.ssId.ssId,
-                pRoamOffloadScanReqParams->ConnectedNetwork.ssId.length);
-   pwdiRoamNetworkType->ssId.ucLength =
-           pRoamOffloadScanReqParams->ConnectedNetwork.ssId.length;
-   vos_mem_copy(pwdiRoamNetworkType->ChannelCache,
-                pRoamOffloadScanReqParams->ConnectedNetwork.ChannelCache,
-                pRoamOffloadScanReqParams->ConnectedNetwork.ChannelCount);
-   pwdiRoamNetworkType->ChannelCount =
-           pRoamOffloadScanReqParams->ConnectedNetwork.ChannelCount;
-   pwdiRoamOffloadScanInfo->ChannelCacheType =
-           pRoamOffloadScanReqParams->ChannelCacheType;
-   vos_mem_copy(pwdiRoamOffloadScanInfo->ValidChannelList,
-                pRoamOffloadScanReqParams->ValidChannelList,
-                pRoamOffloadScanReqParams->ValidChannelCount);
-   pwdiRoamOffloadScanInfo->ValidChannelCount =
-           pRoamOffloadScanReqParams->ValidChannelCount;
-   pwdiRoamOffloadScanInfo->us24GProbeSize =
-    (pRoamOffloadScanReqParams->us24GProbeTemplateLen<WDI_PNO_MAX_PROBE_SIZE)?
-    pRoamOffloadScanReqParams->us24GProbeTemplateLen:WDI_PNO_MAX_PROBE_SIZE;
-   vos_mem_copy(&pwdiRoamOffloadScanInfo->a24GProbeTemplate,
-                pRoamOffloadScanReqParams->p24GProbeTemplate,
-                pwdiRoamOffloadScanInfo->us24GProbeSize);
-   pwdiRoamOffloadScanInfo->us5GProbeSize =
-    (pRoamOffloadScanReqParams->us5GProbeTemplateLen<WDI_PNO_MAX_PROBE_SIZE)?
-    pRoamOffloadScanReqParams->us5GProbeTemplateLen:WDI_PNO_MAX_PROBE_SIZE;
-   vos_mem_copy(&pwdiRoamOffloadScanInfo->a5GProbeTemplate,
-                pRoamOffloadScanReqParams->p5GProbeTemplate,
-                pwdiRoamOffloadScanInfo->us5GProbeSize);
-   pwdiRoamOffloadScanInfo->MDID.mdiePresent =
-           pRoamOffloadScanReqParams->MDID.mdiePresent;
-   pwdiRoamOffloadScanInfo->MDID.mobilityDomain =
-           pRoamOffloadScanReqParams->MDID.mobilityDomain;
-   pwdiRoamOffloadScanInfo->nProbes =
-           pRoamOffloadScanReqParams->nProbes;
-   pwdiRoamOffloadScanInfo->HomeAwayTime =
-           pRoamOffloadScanReqParams->HomeAwayTime;
-   pwdiRoamScanOffloadReqParams->wdiReqStatusCB = NULL;
-   /* Store Params pass it to WDI */
-   pWdaParams->wdaWdiApiMsgParam = (void *)pwdiRoamScanOffloadReqParams;
-   pWdaParams->pWdaContext = pWDA;
-   /* Store param pointer as passed in by caller */
-   pWdaParams->wdaMsgParam = pRoamOffloadScanReqParams;
-   status = WDI_RoamScanOffloadReq(pwdiRoamScanOffloadReqParams,
-                           (WDI_RoamOffloadScanCb)WDA_RoamOffloadScanReqCallback, pWdaParams);
-   if(IS_WDI_STATUS_FAILURE(status))
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-              "Failure in Start Roam Candidate Lookup Req WDI API, free all the memory " );
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam) ;
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      pWdaParams->wdaWdiApiMsgParam = NULL;
-      pWdaParams->wdaMsgParam = NULL;
-   }
-   return CONVERT_WDI2VOS_STATUS(status) ;
-}
-#endif
-
-/*
- * FUNCTION: WDA_RssiFilterRespCallback
+ * FUNCTION: WDA_RssiFilterCallback
  * 
  */ 
-void WDA_RssiFilterRespCallback(WDI_Status status, void* pUserData)
+void WDA_RssiFilterCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
 
@@ -12609,45 +11437,15 @@ void WDA_RssiFilterRespCallback(WDI_Status status, void* pUserData)
    if(NULL == pWdaParams)
    {
       VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
+              "%s: pWdaParams is NULL", __func__);
       VOS_ASSERT(0);
-      return;
+      return ;
    }
-
    vos_mem_free(pWdaParams->wdaMsgParam) ;
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
 
    return ;
-}
-/*
- * FUNCTION: WDA_RssiFilterReqCallback
- * Free memory.
- * Invoked when RSSIFilter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_RssiFilterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessSetPreferredNetworkList
@@ -12679,8 +11477,7 @@ VOS_STATUS WDA_ProcessSetRssiFilterReq(tWDA_CbContext *pWDA,
       return VOS_STATUS_E_NOMEM;
    }
    pwdiSetRssiFilterReqInfo->rssiThreshold = pRssiFilterParams->rssiThreshold;
-   pwdiSetRssiFilterReqInfo->wdiReqStatusCB = WDA_RssiFilterReqCallback;
-   pwdiSetRssiFilterReqInfo->pUserData = pWdaParams;
+   pwdiSetRssiFilterReqInfo->wdiReqStatusCB = NULL;
 
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiSetRssiFilterReqInfo;
@@ -12688,7 +11485,7 @@ VOS_STATUS WDA_ProcessSetRssiFilterReq(tWDA_CbContext *pWDA,
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pRssiFilterParams;
    status = WDI_SetRssiFilterReq( pwdiSetRssiFilterReqInfo, 
-                                 (WDI_PNOScanCb)WDA_RssiFilterRespCallback,
+                                 (WDI_PNOScanCb)WDA_RssiFilterCallback, 
                                  pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -12782,8 +11579,7 @@ VOS_STATUS WDA_ProcessUpdateScanParams(tWDA_CbContext *pWDA,
          pUpdateScanParams->aChannels[i];
    }
 
-   wdiUpdateScanParamsInfoType->wdiReqStatusCB = WDA_UpdateScanParamsReqCallback;
-   wdiUpdateScanParamsInfoType->pUserData = pWdaParams;
+   wdiUpdateScanParamsInfoType->wdiReqStatusCB = NULL;
 
      /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = wdiUpdateScanParamsInfoType;
@@ -12794,7 +11590,7 @@ VOS_STATUS WDA_ProcessUpdateScanParams(tWDA_CbContext *pWDA,
  
 
    status = WDI_UpdateScanParamsReq(wdiUpdateScanParamsInfoType, 
-                    (WDI_UpdateScanParamsCb)WDA_UpdateScanParamsRespCallback,
+                    (WDI_UpdateScanParamsCb)WDA_UpdateScanParamsCallback, 
                     pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -12807,46 +11603,11 @@ VOS_STATUS WDA_ProcessUpdateScanParams(tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 #endif // FEATURE_WLAN_SCAN_PNO
-
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
 /*
- * FUNCTION: WDA_RoamOffloadScanReqCallback
+ * FUNCTION: WDA_SetPowerParamsCallback
  *
  */
-void WDA_RoamOffloadScanReqCallback(WDI_Status status, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-                                          "<------ %s " ,__func__);
-    if (NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-              "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0) ;
-      return ;
-   }
-   if ( pWdaParams != NULL )
-   {
-      if ( pWdaParams->wdaWdiApiMsgParam != NULL )
-      {
-         vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      }
-      if ( pWdaParams->wdaMsgParam != NULL)
-      {
-         vos_mem_free(pWdaParams->wdaMsgParam);
-      }
-
-      vos_mem_free(pWdaParams) ;
-   }
-   return ;
-}
-#endif
-
-/*
- * FUNCTION: WDA_SetPowerParamsRespCallback
- *
- */
-void WDA_SetPowerParamsRespCallback(WDI_Status status, void* pUserData)
+void WDA_SetPowerParamsCallback(WDI_Status status, void* pUserData)
 {
    tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
 
@@ -12860,49 +11621,27 @@ void WDA_SetPowerParamsRespCallback(WDI_Status status, void* pUserData)
       VOS_ASSERT(0);
       return;
    }
-
-   vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-   vos_mem_free(pWdaParams->wdaMsgParam);
-   vos_mem_free(pWdaParams);
-
-   return;
-}
-/*
- * FUNCTION: WDA_SetPowerParamsReqCallback
- * Free memory.
- * Invoked when SetPowerParams REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_SetPowerParamsReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
+   if( pWdaParams != NULL )
    {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
+      if( pWdaParams->wdaWdiApiMsgParam != NULL )
+      {
+         vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
+      }
+      if( pWdaParams->wdaMsgParam != NULL)
+      {
+         vos_mem_free(pWdaParams->wdaMsgParam);
+      }
       vos_mem_free(pWdaParams);
    }
-
    return;
 }
 
 #ifdef WLAN_FEATURE_PACKET_FILTERING
 /*
- * FUNCTION: WDA_8023MulticastListRespCallback
+ * FUNCTION: WDA_8023MulticastListReqCallback
  * 
  */ 
-void WDA_8023MulticastListRespCallback(
+void WDA_8023MulticastListReqCallback( 
                         WDI_RcvFltPktSetMcListRspParamsType  *pwdiRcvFltPktSetMcListRspInfo,
                         void * pUserData)
 {
@@ -12922,37 +11661,8 @@ void WDA_8023MulticastListRespCallback(
    vos_mem_free(pWdaParams) ;
    //print a msg, nothing else to do
    VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "WDA_8023MulticastListRespCallback invoked " );
+              "WDA_8023MulticastListReqCallback invoked " );
    return ;
-}
-/*
- * FUNCTION: WDA_8023MulticastListReqCallback
- * Free memory.
- * Invoked when 8023MulticastList REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_8023MulticastListReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_Process8023MulticastListReq
@@ -13003,8 +11713,7 @@ VOS_STATUS WDA_Process8023MulticastListReq (tWDA_CbContext *pWDA,
                    &(pRcvFltMcAddrList->multicastAddr[i]),
                    sizeof(tSirMacAddr));
    }
-   pwdiFltPktSetMcListReqParamsType->wdiReqStatusCB = WDA_8023MulticastListReqCallback;
-   pwdiFltPktSetMcListReqParamsType->pUserData = pWdaParams;
+   pwdiFltPktSetMcListReqParamsType->wdiReqStatusCB = NULL;
 
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiFltPktSetMcListReqParamsType;
@@ -13013,7 +11722,7 @@ VOS_STATUS WDA_Process8023MulticastListReq (tWDA_CbContext *pWDA,
    pWdaParams->wdaMsgParam = pRcvFltMcAddrList;
    status = WDI_8023MulticastListReq(
                         pwdiFltPktSetMcListReqParamsType, 
-                        (WDI_8023MulticastListCb)WDA_8023MulticastListRespCallback,
+                        (WDI_8023MulticastListCb)WDA_8023MulticastListReqCallback,
                         pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -13055,11 +11764,10 @@ void WDA_ReceiveFilterSetFilterRespCallback(
 }
 
 /*
- * FUNCTION: WDA_ReceiveFilterSetFilterReqCallback
- * Free memory.
- * Invoked when ReceiveFilterSetFilter REQ failed in WDI and no RSP callback is generated.
+ * FUNCTION: WDA_ReqCallback
+ *
  */
-void WDA_ReceiveFilterSetFilterReqCallback(WDI_Status   wdiStatus,
+void WDA_ReqCallback(WDI_Status   wdiStatus,
                      void*        pUserData)
 {
    tWDA_ReqParams        *pWdaParams = (tWDA_ReqParams *)pUserData;
@@ -13180,7 +11888,7 @@ VOS_STATUS WDA_ProcessReceiveFilterSetFilterReq (tWDA_CbContext *pWDA,
                  pwdiSetRcvPktFilterReqParamsType->
                          wdiPktFilterCfg.paramsData[i].dataMask[5]);
    }
-   pwdiSetRcvPktFilterReqParamsType->wdiReqStatusCB = WDA_ReceiveFilterSetFilterReqCallback;
+   pwdiSetRcvPktFilterReqParamsType->wdiReqStatusCB = WDA_ReqCallback;
    pwdiSetRcvPktFilterReqParamsType->pUserData = pWdaParams;
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiSetRcvPktFilterReqParamsType;
@@ -13201,10 +11909,10 @@ VOS_STATUS WDA_ProcessReceiveFilterSetFilterReq (tWDA_CbContext *pWDA,
    return CONVERT_WDI2VOS_STATUS(status) ;
 }
 /*
- * FUNCTION: WDA_FilterMatchCountRespCallback
+ * FUNCTION: WDA_FilterMatchCountReqCallback
  * 
  */ 
-void WDA_FilterMatchCountRespCallback(
+void WDA_FilterMatchCountReqCallback(
                             WDI_RcvFltPktMatchCntRspParamsType *pwdiRcvFltPktMatchRspParams, 
                             void * pUserData)
 {
@@ -13266,44 +11974,6 @@ void WDA_FilterMatchCountRespCallback(
    vos_mem_free(pWdaParams->wdaMsgParam) ;
    vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
    vos_mem_free(pWdaParams) ;
-
-   return;
-}
-/*
- * FUNCTION: WDA_FilterMatchCountReqCallback
- * Free memory and send RSP back to SME.
- * Invoked when FilterMatchCount REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_FilterMatchCountReqCallback(WDI_Status wdiStatus, void * pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-   vos_msg_t vosMsg;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: pWdaParams received NULL", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   /* VOS message wrapper */
-   vosMsg.type = eWNI_PMC_PACKET_COALESCING_FILTER_MATCH_COUNT_RSP;
-   vosMsg.bodyptr = NULL;
-   vosMsg.bodyval = 0;
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-      vos_mq_post_message(VOS_MQ_ID_SME, (vos_msg_t*)&vosMsg);
-   }
-
-   return;
 }
 /*
  * FUNCTION: WDA_ProcessPacketFilterMatchCountReq
@@ -13334,8 +12004,7 @@ VOS_STATUS WDA_ProcessPacketFilterMatchCountReq (tWDA_CbContext *pWDA, tpSirRcvF
       return VOS_STATUS_E_NOMEM;
    }
 
-   pwdiRcvFltPktMatchCntReqParamsType->wdiReqStatusCB = WDA_FilterMatchCountReqCallback;
-   pwdiRcvFltPktMatchCntReqParamsType->pUserData = pWdaParams;
+   pwdiRcvFltPktMatchCntReqParamsType->wdiReqStatusCB = NULL;
 
    vos_mem_copy( pwdiRcvFltPktMatchCntReqParamsType->bssId,
                  pRcvFltPktMatchRsp->bssId, 
@@ -13347,7 +12016,7 @@ VOS_STATUS WDA_ProcessPacketFilterMatchCountReq (tWDA_CbContext *pWDA, tpSirRcvF
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pRcvFltPktMatchRsp;
    status = WDI_FilterMatchCountReq(pwdiRcvFltPktMatchCntReqParamsType, 
-                 (WDI_FilterMatchCountCb)WDA_FilterMatchCountRespCallback,
+                 (WDI_FilterMatchCountCb)WDA_FilterMatchCountReqCallback,
                  pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -13390,35 +12059,6 @@ void WDA_ReceiveFilterClearFilterRespCallback(
    return ;
 }
 /*
- * FUNCTION: WDA_ReceiveFilterClearFilterReqCallback
- * Free memory.
- * Invoked when ReceiveFilterClearFilter REQ failed in WDI and no RSP callback is generated.
- */
-void WDA_ReceiveFilterClearFilterReqCallback(WDI_Status wdiStatus, void* pUserData)
-{
-   tWDA_ReqParams *pWdaParams = (tWDA_ReqParams *)pUserData;
-
-   VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_INFO,
-              "<------ %s, wdiStatus: %d", __func__, wdiStatus);
-
-   if(NULL == pWdaParams)
-   {
-      VOS_TRACE( VOS_MODULE_ID_WDA, VOS_TRACE_LEVEL_ERROR,
-                 "%s: Invalid pWdaParams pointer", __func__);
-      VOS_ASSERT(0);
-      return;
-   }
-
-   if(IS_WDI_STATUS_FAILURE(wdiStatus))
-   {
-      vos_mem_free(pWdaParams->wdaWdiApiMsgParam);
-      vos_mem_free(pWdaParams->wdaMsgParam);
-      vos_mem_free(pWdaParams);
-   }
-
-   return;
-}
-/*
  * FUNCTION: WDA_ProcessReceiveFilterClearFilterReq
  * Request to WDI to clear Receive Filters
  */
@@ -13454,7 +12094,7 @@ VOS_STATUS WDA_ProcessReceiveFilterClearFilterReq (tWDA_CbContext *pWDA,
    vos_mem_copy(pwdiRcvFltPktClearReqParamsType->filterClearParam.bssId,
                          pRcvFltPktClearParam->bssId, sizeof(wpt_macAddr));
 
-   pwdiRcvFltPktClearReqParamsType->wdiReqStatusCB = WDA_ReceiveFilterClearFilterReqCallback;
+   pwdiRcvFltPktClearReqParamsType->wdiReqStatusCB = WDA_ReqCallback;
    pwdiRcvFltPktClearReqParamsType->pUserData = pWdaParams;
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiRcvFltPktClearReqParamsType;
@@ -13519,8 +12159,7 @@ VOS_STATUS WDA_ProcessSetPowerParamsReq(tWDA_CbContext *pWDA,
       pPowerParams->uEnableBET;
    pwdiSetPowerParamsReqInfo->wdiSetPowerParamsInfo.uBETInterval      = 
       pPowerParams->uBETInterval; 
-   pwdiSetPowerParamsReqInfo->wdiReqStatusCB = WDA_SetPowerParamsReqCallback;
-   pwdiSetPowerParamsReqInfo->pUserData = pWdaParams;
+   pwdiSetPowerParamsReqInfo->wdiReqStatusCB = NULL;
 
    /* Store Params pass it to WDI */
    pWdaParams->wdaWdiApiMsgParam = (void *)pwdiSetPowerParamsReqInfo;
@@ -13528,7 +12167,7 @@ VOS_STATUS WDA_ProcessSetPowerParamsReq(tWDA_CbContext *pWDA,
    /* Store param pointer as passed in by caller */
    pWdaParams->wdaMsgParam = pPowerParams;
    status = WDI_SetPowerParamsReq( pwdiSetPowerParamsReqInfo, 
-                                 (WDI_SetPowerParamsCb)WDA_SetPowerParamsRespCallback,
+                                 (WDI_SetPowerParamsCb)WDA_SetPowerParamsCallback, 
                                  pWdaParams);
    if(IS_WDI_STATUS_FAILURE(status))
    {
@@ -13895,10 +12534,9 @@ VOS_STATUS WDA_ProcessUpdateOpMode(tWDA_CbContext *pWDA,
   PARAMETERS
     pMac : upper MAC context pointer
     displaySnapshot : Display DXE snapshot option
-    debugFlags      : Enable stall detect features
-                      defined by WPAL_DeviceDebugFlags
-                      These features may effect
-                      data performance.
+    enableStallDetect : Enable stall detect feature
+                        This feature will take effect to data performance
+                        Not integrate till fully verification
 
   RETURN VALUE
     NONE
@@ -13908,7 +12546,7 @@ void WDA_TransportChannelDebug
 (
   tpAniSirGlobal pMac,
   v_BOOL_t       displaySnapshot,
-  v_U8_t         debugFlags
+  v_BOOL_t       toggleStallDetect
 )
 {
    if (NULL != pMac)
@@ -13918,24 +12556,6 @@ void WDA_TransportChannelDebug
       /* 17 is BMU dump opcode */
       WDA_HALDumpCmdReq(pMac, 17, 0, 0, 0, 0, NULL);
    }
-   WDI_TransportChannelDebug(displaySnapshot, debugFlags);
+   WDI_TransportChannelDebug(displaySnapshot, toggleStallDetect);
    return;
-}
-
-/*==========================================================================
-  FUNCTION   WDA_SetEnableSSR
-
-  DESCRIPTION
-    API to enable/disable SSR on WDI timeout
-
-  PARAMETERS
-    enableSSR : enable/disable SSR
-
-  RETURN VALUE
-    NONE
-
-===========================================================================*/
-void WDA_SetEnableSSR(v_BOOL_t enableSSR)
-{
-   WDI_SetEnableSSR(enableSSR);
 }

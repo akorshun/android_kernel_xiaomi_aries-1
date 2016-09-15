@@ -115,7 +115,7 @@ typedef enum eLimSystemRole
     eLIM_BT_AMP_AP_ROLE,
     eLIM_P2P_DEVICE_ROLE,
     eLIM_P2P_DEVICE_GO,
-    eLIM_P2P_DEVICE_CLIENT
+    eLIM_P2P_DEVICE_CLINET
 } tLimSystemRole;
 
 /**
@@ -661,7 +661,7 @@ typedef struct sLimWscIeInfo
 } tLimWscIeInfo, *tpLimWscIeInfo;
 
 // maximum number of tspec's supported
-#define LIM_NUM_TSPEC_MAX      15
+#define LIM_NUM_TSPEC_MAX      4
 
 
 //structure to hold all 11h specific data

@@ -138,7 +138,6 @@ tpPESession peCreateSession(tpAniSirGlobal pMac, tANI_U8 *bssid , tANI_U8* sessi
             {
                 limLog(pMac, LOGE, FL("memory allocate failed!"));
                 palFreeMemory(pMac->hHdd,pMac->lim.gpSession[i].dph.dphHashTable.pHashTable);
-                pMac->lim.gpSession[i].dph.dphHashTable.pHashTable = NULL;
                 return NULL;
             }
             pMac->lim.gpSession[i].dph.dphHashTable.size = numSta;
@@ -153,8 +152,6 @@ tpPESession peCreateSession(tpAniSirGlobal pMac, tANI_U8 *bssid , tANI_U8* sessi
                 PELOGE(limLog(pMac, LOGE, FL("memory allocate failed!"));)
                 palFreeMemory(pMac->hHdd,pMac->lim.gpSession[i].dph.dphHashTable.pHashTable);
                 palFreeMemory(pMac->hHdd,pMac->lim.gpSession[i].dph.dphHashTable.pDphNodeArray);
-                pMac->lim.gpSession[i].dph.dphHashTable.pHashTable = NULL;
-                pMac->lim.gpSession[i].dph.dphHashTable.pDphNodeArray = NULL;
                 return NULL;
             }
             palZeroMemory(pMac->hHdd, pMac->lim.gpSession[i].gpLimPeerIdxpool,
@@ -197,8 +194,6 @@ tpPESession peCreateSession(tpAniSirGlobal pMac, tANI_U8 *bssid , tANI_U8* sessi
             palZeroMemory(pMac->hHdd, pMac->lim.gpSession[i].peerAIDBitmap,
                   sizeof(pMac->lim.gpSession[i].peerAIDBitmap));
 #endif
-            pMac->lim.gpSession[i].fWaitForProbeRsp = 0;
-            pMac->lim.gpSession[i].fIgnoreCapsChange = 0;
             return(&pMac->lim.gpSession[i]);
         }
     }

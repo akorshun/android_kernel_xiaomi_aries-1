@@ -80,15 +80,9 @@ static tAniBool glimTriggerBackgroundScanDuringQuietBss_Status = eSIR_TRUE;
 static const tANI_U8 abChannel[]= {36,40,44,48,52,56,60,64,100,104,108,112,116,
             120,124,128,132,136,140,149,153,157,161,165};
 
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-static const tANI_U8 aUnsortedChannelList[]= {52,56,60,64,100,104,108,112,116,
-            120,124,128,132,136,140,36,40,44,48,149,153,157,161,165};
-#endif
-
 //#define LIM_MAX_ACTIVE_SESSIONS 3  //defined temporarily for BT-AMP SUPPORT 
 #define SUCCESS 1                   //defined temporarily for BT-AMP
 
-#define MAX_BA_WINDOW_SIZE_FOR_CISCO 25
 /** -------------------------------------------------------------
 \fn limAssignDialogueToken
 \brief Assigns dialogue token.
@@ -157,7 +151,6 @@ limSearchAndDeleteDialogueToken(tpAniSirGlobal pMac, tANI_U8 token, tANI_U16 ass
         if(NULL == pMac->lim.pDialogueTokenHead)
             pMac->lim.pDialogueTokenTail = NULL;
         palFreeMemory(pMac->hHdd, (void *) pCurrNode);
-        pMac->lim.pDialogueTokenHead = NULL;
         return eSIR_SUCCESS;
     }
 
@@ -182,8 +175,6 @@ limSearchAndDeleteDialogueToken(tpAniSirGlobal pMac, tANI_U8 token, tANI_U16 ass
         //if the node being deleted is the last one then we also need to move the tail pointer to the prevNode.
         if(NULL == pCurrNode->next)
               pMac->lim.pDialogueTokenTail = pPrevNode;
-        palFreeMemory(pMac->hHdd, (void *) pCurrNode);
-        pMac->lim.pDialogueTokenHead = NULL;
         return eSIR_SUCCESS;
     }
 
@@ -907,13 +898,6 @@ limInitMlm(tpAniSirGlobal pMac)
     /// Initialize scan result hash table
     limReInitScanResults(pMac); //sep26th review
 
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-    /// Initialize lfr scan result hash table
-    // Could there be a problem in multisession with SAP/P2P GO, when in the
-    // middle of FW bg scan, SAP started; Again that could be a problem even on
-    // infra + SAP/P2P GO too - TBD
-    limReInitLfrScanResults(pMac);
-#endif
   
     /// Initialize number of pre-auth contexts
     pMac->lim.gLimNumPreAuthContexts = 0;
@@ -967,11 +951,6 @@ limCleanupMlm(tpAniSirGlobal pMac)
 {
     tANI_U32   n;
     tLimPreAuthNode *pAuthNode;
-#ifdef WLAN_FEATURE_11W
-    tANI_U32  bss_entry, sta_entry;
-    tpDphHashNode pStaDs = NULL;
-    tpPESession psessionEntry = NULL;
-#endif
 
     if (pMac->lim.gLimTimersCreated == 1)
     {
@@ -1104,53 +1083,11 @@ limCleanupMlm(tpAniSirGlobal pMac)
         tx_timer_deactivate(&pMac->lim.limTimers.gLimP2pSingleShotNoaInsertTimer);
         tx_timer_delete(&pMac->lim.limTimers.gLimP2pSingleShotNoaInsertTimer);
 
-        tx_timer_deactivate(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer);
-        tx_timer_delete(&pMac->lim.limTimers.gLimActiveToPassiveChannelTimer);
-
         pMac->lim.gLimTimersCreated = 0;
     }
 
-#ifdef WLAN_FEATURE_11W
-    /*
-     * When SSR is triggered, we need to loop through
-     * each STA associated per BSSId and deactivate/delete
-     * the pmfSaQueryTimer for it
-     */
-    if (vos_is_logp_in_progress(VOS_MODULE_ID_PE, NULL))
-    {
-        VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
-                  FL("SSR is detected, proceed to clean up pmfSaQueryTimer"));
-        for (bss_entry = 0; bss_entry < pMac->lim.maxBssId; bss_entry++)
-        {
-             if (pMac->lim.gpSession[bss_entry].valid)
-             {
-                 for (sta_entry = 1; sta_entry < pMac->lim.gLimAssocStaLimit;
-                      sta_entry++)
-                 {
-                      psessionEntry = &pMac->lim.gpSession[bss_entry];
-                      pStaDs = dphGetHashEntry(pMac, sta_entry,
-                                              &psessionEntry->dph.dphHashTable);
-                      if (NULL == pStaDs)
-                      {
-                          continue;
-                      }
-                      VOS_TRACE(VOS_MODULE_ID_PE, VOS_TRACE_LEVEL_ERROR,
-                                FL("Deleting pmfSaQueryTimer for staid[%d]"),
-                                pStaDs->staIndex) ;
-                      tx_timer_deactivate(&pStaDs->pmfSaQueryTimer);
-                      tx_timer_delete(&pStaDs->pmfSaQueryTimer);
-                }
-            }
-        }
-    }
-#endif
-
     /// Cleanup cached scan list
     limReInitScanResults(pMac);
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-    /// Cleanup cached scan list
-    limReInitLfrScanResults(pMac);
-#endif
 
 } /*** end limCleanupMlm() ***/
 
@@ -3368,15 +3305,6 @@ void limSwitchPrimarySecondaryChannel(tpAniSirGlobal pMac, tpPESession psessionE
         return;
     }
 #endif
-    /* Assign the callback to resume TX once channel is changed.
-     */
-    psessionEntry->currentReqChannel = newChannel;
-    psessionEntry->limRFBand = limGetRFBand(newChannel);
-
-    psessionEntry->channelChangeReasonCode=LIM_SWITCH_CHANNEL_OPERATION;
-
-    pMac->lim.gpchangeChannelCallback = limSwitchChannelCback;
-    pMac->lim.gpchangeChannelData = NULL;
 
 #if defined WLAN_FEATURE_VOWIFI  
                 limSendSwitchChnlParams(pMac, newChannel, subband, psessionEntry->maxTxPower, psessionEntry->peSessionId);
@@ -5189,20 +5117,6 @@ void limUpdateStaRunTimeHTSwitchChnlParams( tpAniSirGlobal   pMac,
     }
 #endif
 
-    /*
-     * Do not try to switch channel if RoC is in progress. RoC code path uses
-     * pMac->lim.gpLimRemainOnChanReq to notify the upper layers that the device
-     * has started listening on the channel requested as part of RoC, if we set
-     * pMac->lim.gpLimRemainOnChanReq to NULL as we do below then the
-     * upper layers will think that the channel change is not successful and the
-     * RoC from the upper layer perspective will never end...
-     */
-    if (pMac->lim.gpLimRemainOnChanReq)
-    {
-        limLog( pMac, LOGE, FL( "RoC is in progress"));
-        return;
-    }
-
     if ( psessionEntry->htSecondaryChannelOffset != ( tANI_U8 ) pHTInfo->secondaryChannelOffset ||
          psessionEntry->htRecommendedTxWidthSet  != ( tANI_U8 ) pHTInfo->recommendedTxWidthSet )
     {
@@ -5608,7 +5522,6 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     {
         limLog(pMac, LOGE,FL("session does not exist for given BSSId"));
         palFreeMemory(pMac->hHdd, limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
        
@@ -5620,7 +5533,6 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
 #endif
     {
         palFreeMemory(pMac->hHdd, limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 
@@ -5646,7 +5558,6 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
     if (!htCapable)
     {
         palFreeMemory(pMac->hHdd, limMsg->bodyptr);
-        limMsg->bodyptr = NULL;
         return;
     }
 #endif
@@ -5673,141 +5584,65 @@ limProcessAddBaInd(tpAniSirGlobal pMac, tpSirMsgQ limMsg)
         }
     }
     palFreeMemory(pMac->hHdd, limMsg->bodyptr);
-    limMsg->bodyptr = NULL;
     return;
 }
 
 
 /** -------------------------------------------------------------
-\fn      limDeleteBASessions
-\brief   Deletes all the exisitng BA sessions for given session
-         and BA direction.
+\fn limDelAllBASessions
+\brief Deletes all the exisitng BA sessions.
+\        Note : This API is provided for Mac OSx only. The reason for this is that Mac OSx may not
+\                  restart after CFG update.
 \param   tpAniSirGlobal pMac
-\param   tpPESession pSessionEntry
-\param   tANI_U32 baDirection
-\return  None
+\return None
 -------------------------------------------------------------*/
 
 void 
-limDeleteBASessions(tpAniSirGlobal pMac, tpPESession pSessionEntry,
-                    tANI_U32 baDirection)
+limDelAllBASessions(tpAniSirGlobal pMac)
 {
     tANI_U32 i;
     tANI_U8 tid;
     tpDphHashNode pSta;
 
-    if (NULL == pSessionEntry)
+    tpPESession psessionEntry =  &pMac->lim.gpSession[0]; //TBD-RAJESH HOW TO GET sessionEntry?????
+    for(tid = 0; tid < STACFG_MAX_TC; tid++)
     {
-        limLog(pMac, LOGE, FL("Session does not exist"));
-    }
-    else
-    {
-        for(tid = 0; tid < STACFG_MAX_TC; tid++)
+        if((eLIM_AP_ROLE == psessionEntry->limSystemRole) ||(psessionEntry->limSystemRole == eLIM_BT_AMP_AP_ROLE)||
+              (eLIM_STA_IN_IBSS_ROLE == psessionEntry->limSystemRole))
         {
-            if ((eLIM_AP_ROLE == pSessionEntry->limSystemRole) ||
-                (pSessionEntry->limSystemRole == eLIM_BT_AMP_AP_ROLE) ||
-                (eLIM_STA_IN_IBSS_ROLE == pSessionEntry->limSystemRole) ||
-                (pSessionEntry->limSystemRole == eLIM_P2P_DEVICE_GO))
+            for(i = 0; i < pMac->lim.maxStation; i++)
             {
-                for (i = 0; i < pMac->lim.maxStation; i++)
-                {
-                    pSta = pSessionEntry->dph.dphHashTable.pDphNodeArray + i;
-                    if (pSta && pSta->added)
-                    {
-                        if ((eBA_ENABLE == pSta->tcCfg[tid].fUseBATx) &&
-                                       (baDirection & BA_INITIATOR))
-                        {
-                            limPostMlmDelBAReq(pMac, pSta, eBA_INITIATOR, tid,
-                                               eSIR_MAC_UNSPEC_FAILURE_REASON,
-                                               pSessionEntry);
-                        }
-                        if ((eBA_ENABLE == pSta->tcCfg[tid].fUseBARx) &&
-                                        (baDirection & BA_RECIPIENT))
-                        {
-                            limPostMlmDelBAReq(pMac, pSta, eBA_RECIPIENT, tid,
-                                               eSIR_MAC_UNSPEC_FAILURE_REASON,
-                                               pSessionEntry);
-                        }
-                    }
-                }
-            }
-            else if ((eLIM_STA_ROLE == pSessionEntry->limSystemRole) ||
-                     (eLIM_BT_AMP_STA_ROLE == pSessionEntry->limSystemRole) ||
-                     (eLIM_P2P_DEVICE_ROLE == pSessionEntry->limSystemRole))
-            {
-                pSta = dphGetHashEntry(pMac, DPH_STA_HASH_INDEX_PEER,
-                                       &pSessionEntry->dph.dphHashTable);
+                pSta = psessionEntry->dph.dphHashTable.pDphNodeArray + i;
                 if (pSta && pSta->added)
                 {
-                    if ((eBA_ENABLE == pSta->tcCfg[tid].fUseBATx) &&
-                                    (baDirection & BA_INITIATOR))
+                    if(eBA_ENABLE == pSta->tcCfg[tid].fUseBATx)
                     {
-                        limPostMlmDelBAReq(pMac, pSta, eBA_INITIATOR, tid,
-                                           eSIR_MAC_UNSPEC_FAILURE_REASON,
-                                           pSessionEntry);
+                        limPostMlmDelBAReq(pMac, pSta, eBA_INITIATOR, tid, eSIR_MAC_UNSPEC_FAILURE_REASON,psessionEntry);
                     }
-                    if ((eBA_ENABLE == pSta->tcCfg[tid].fUseBARx) &&
-                                    (baDirection & BA_RECIPIENT))
+                    else if(eBA_ENABLE == pSta->tcCfg[tid].fUseBARx)
                     {
-                        limPostMlmDelBAReq(pMac, pSta, eBA_RECIPIENT, tid,
-                                           eSIR_MAC_UNSPEC_FAILURE_REASON,
-                                           pSessionEntry);
+                        limPostMlmDelBAReq(pMac, pSta, eBA_RECIPIENT, tid, eSIR_MAC_UNSPEC_FAILURE_REASON,psessionEntry);
                     }
+                }
+            }
+        }
+        else if((eLIM_STA_ROLE == psessionEntry->limSystemRole)||(eLIM_BT_AMP_STA_ROLE == psessionEntry->limSystemRole))
+        {
+            pSta = dphGetHashEntry(pMac, DPH_STA_HASH_INDEX_PEER, &psessionEntry->dph.dphHashTable);
+            if (pSta && pSta->added)
+            {
+                if(eBA_ENABLE == pSta->tcCfg[tid].fUseBATx)
+                {
+                    limPostMlmDelBAReq(pMac, pSta, eBA_INITIATOR, tid, eSIR_MAC_UNSPEC_FAILURE_REASON,psessionEntry);
+                }
+                if(eBA_ENABLE == pSta->tcCfg[tid].fUseBARx)
+                {
+                    limPostMlmDelBAReq(pMac, pSta, eBA_RECIPIENT, tid, eSIR_MAC_UNSPEC_FAILURE_REASON,psessionEntry);
                 }
             }
         }
     }
 }
-
-/** -------------------------------------------------------------
-\fn     limDelAllBASessions
-\brief  Deletes all the exisitng BA sessions.
-\param  tpAniSirGlobal pMac
-\return None
--------------------------------------------------------------*/
-
-void limDelAllBASessions(tpAniSirGlobal pMac)
-{
-    tANI_U32 i;
-    tpPESession pSessionEntry;
-
-    for (i = 0; i < pMac->lim.maxBssId; i++)
-    {
-        pSessionEntry = peFindSessionBySessionId(pMac, i);
-        if (pSessionEntry)
-        {
-            limDeleteBASessions(pMac, pSessionEntry, BA_BOTH_DIRECTIONS);
-        }
-    }
-}
-
-/** -------------------------------------------------------------
-\fn     limDelAllBASessionsBtc
-\brief  Deletes all the exisitng BA receipent sessions in 2.4GHz
-        band.
-\param  tpAniSirGlobal pMac
-\return None
--------------------------------------------------------------*/
-
-void limDelAllBASessionsBtc(tpAniSirGlobal pMac)
-{
-    tANI_U32 i;
-    tpPESession pSessionEntry;
-
-    for (i = 0; i < pMac->lim.maxBssId; i++)
-    {
-        pSessionEntry = peFindSessionBySessionId(pMac, i);
-        if (pSessionEntry)
-        {
-            if (SIR_BAND_2_4_GHZ ==
-                limGetRFBand(pSessionEntry->currentOperChannel))
-            {
-                limDeleteBASessions(pMac, pSessionEntry, BA_RECIPIENT);
-            }
-        }
-    }
-}
-
 /** -------------------------------------------------------------
 \fn limProcessDelTsInd
 \brief handles the DeleteTS indication coming from HAL or generated by PE itself in some error cases.
@@ -5832,7 +5667,6 @@ if((psessionEntry = peFindSessionByBssid(pMac,pDelTsParam->bssId,&sessionId))== 
     {
          limLog(pMac, LOGE,FL("session does not exist for given BssId"));
          palFreeMemory(pMac->hHdd, (void *)(limMsg->bodyptr));
-         limMsg->bodyptr = NULL;
          return;
     }
 
@@ -5899,7 +5733,6 @@ error2:
   palFreeMemory(pMac->hHdd, (void *) pDelTsReq);
 error1:
   palFreeMemory(pMac->hHdd, (void *)(limMsg->bodyptr));
-  limMsg->bodyptr = NULL;
   return;
 }
 
@@ -5963,17 +5796,7 @@ tSirRetStatus limPostMlmAddBAReq( tpAniSirGlobal pMac,
   // Requesting the ADDBA recipient to populate the size.
   // If ADDBA is accepted, a non-zero buffer size should
   // be returned in the ADDBA Rsp
-  if ((TRUE == psessionEntry->isCiscoVendorAP) &&
-        (eHT_CHANNEL_WIDTH_80MHZ != pStaDs->htSupportedChannelWidthSet))
-  {
-      /* Cisco AP has issues in receiving more than 25 "mpdu in ampdu"
-          causing very low throughput in HT40 case */
-      limLog( pMac, LOGW,
-          FL( "Requesting ADDBA with Cisco 1225 AP, window size 25"));
-      pMlmAddBAReq->baBufferSize = MAX_BA_WINDOW_SIZE_FOR_CISCO;
-  }
-  else
-      pMlmAddBAReq->baBufferSize = 0;
+  pMlmAddBAReq->baBufferSize = 0;
 
   limLog( pMac, LOGW,
       FL( "Requesting an ADDBA to setup a %s BA session with STA %d for TID %d" ),
@@ -7283,8 +7106,7 @@ void limHandleHeartBeatFailureTimeout(tpAniSirGlobal pMac)
                         psessionEntry->limMlmState, psessionEntry->LimRxedBeaconCntDuringHB);
                 if (psessionEntry->limMlmState == eLIM_MLM_LINK_ESTABLISHED_STATE)
                 {
-                    if ((!LIM_IS_CONNECTION_ACTIVE(psessionEntry))&&
-                                                  (psessionEntry->limSmeState != eLIM_SME_WT_DISASSOC_STATE))
+                    if (!LIM_IS_CONNECTION_ACTIVE(psessionEntry))
                     {
                         limLog(pMac, LOGE, FL("Probe_hb_failure: for session:%d " ),psessionEntry->peSessionId);
                         /* AP did not respond to Probe Request. Tear down link with it.*/
@@ -7357,15 +7179,11 @@ void limHandleDeferMsgError(tpAniSirGlobal pMac, tpSirMsgQ pLimMsg)
 {
       if(SIR_BB_XPORT_MGMT_MSG == pLimMsg->type) 
         {
-            /*Decrement the Pending count before droping */
-            limDecrementPendingMgmtCount (pMac);
             vos_pkt_return_packet((vos_pkt_t*)pLimMsg->bodyptr);
         }
       else if(pLimMsg->bodyptr != NULL)
-      {
             palFreeMemory( pMac->hHdd, (tANI_U8 *) pLimMsg->bodyptr);
-            pLimMsg->bodyptr = NULL;
-      }
+
 }
 
 
@@ -7425,7 +7243,6 @@ void limProcessAddStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to palAllocateMemory failed for Add Sta self RSP"));
       palFreeMemory( pMac->hHdd, (tANI_U8 *)pAddStaSelfParams);
-      limMsgQ->bodyptr = NULL;
       return;
    }
 
@@ -7438,7 +7255,6 @@ void limProcessAddStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    palCopyMemory( pMac->hHdd, pRsp->selfMacAddr, pAddStaSelfParams->selfMacAddr, sizeof(tSirMacAddr) );
 
    palFreeMemory( pMac->hHdd, (tANI_U8 *)pAddStaSelfParams);
-   limMsgQ->bodyptr = NULL;
 
    mmhMsg.type = eWNI_SME_ADD_STA_SELF_RSP;
    mmhMsg.bodyptr = pRsp;
@@ -7463,7 +7279,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
       /// Buffer not available. Log error
       limLog(pMac, LOGP, FL("call to palAllocateMemory failed for Add Sta self RSP"));
       palFreeMemory( pMac->hHdd, (tANI_U8 *)pDelStaSelfParams);
-      limMsgQ->bodyptr = NULL;
       return;
    }
 
@@ -7476,7 +7291,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
    palCopyMemory( pMac->hHdd, pRsp->selfMacAddr, pDelStaSelfParams->selfMacAddr, sizeof(tSirMacAddr) );
 
    palFreeMemory( pMac->hHdd, (tANI_U8 *)pDelStaSelfParams);
-   limMsgQ->bodyptr = NULL;
 
    mmhMsg.type = eWNI_SME_DEL_STA_SELF_RSP;
    mmhMsg.bodyptr = pRsp;
@@ -7495,11 +7309,6 @@ void limProcessDelStaSelfRsp(tpAniSirGlobal pMac,tpSirMsgQ limMsgQ)
 tANI_U8 limUnmapChannel(tANI_U8 mapChannel)
 {
    if( mapChannel > 0 && mapChannel < 25 )
-#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
-       if (IS_ROAM_SCAN_OFFLOAD_FEATURE_ENABLE)
-           return aUnsortedChannelList[mapChannel -1];
-       else
-#endif
      return abChannel[mapChannel -1];
    else
      return 0;
@@ -7597,21 +7406,12 @@ v_U8_t limBuildP2pIe(tpAniSirGlobal pMac, tANI_U8 *ie, tANI_U8 *data, tANI_U8 ie
 v_U8_t limGetNoaAttrStreamInMultP2pIes(tpAniSirGlobal pMac,v_U8_t* noaStream,v_U8_t noaLen,v_U8_t overFlowLen)
 {
    v_U8_t overFlowP2pStream[SIR_MAX_NOA_ATTR_LEN];
-
-   if ((noaLen <= (SIR_MAX_NOA_ATTR_LEN+SIR_P2P_IE_HEADER_LEN)) &&
-       (noaLen >= overFlowLen) && (overFlowLen <= SIR_MAX_NOA_ATTR_LEN))
-   {
-       palCopyMemory( pMac->hHdd, overFlowP2pStream,
-                     noaStream + noaLen - overFlowLen, overFlowLen);
-       noaStream[noaLen - overFlowLen] = SIR_MAC_EID_VENDOR;
-       noaStream[noaLen - overFlowLen + 1] = overFlowLen + SIR_MAC_P2P_OUI_SIZE;
-       palCopyMemory( pMac->hHdd, noaStream+noaLen-overFlowLen + 2,
-                     SIR_MAC_P2P_OUI, SIR_MAC_P2P_OUI_SIZE);
-       palCopyMemory( pMac->hHdd,
-                     noaStream+noaLen + 2 + SIR_MAC_P2P_OUI_SIZE - overFlowLen,
-                     overFlowP2pStream, overFlowLen);
-   }
-
+   palCopyMemory( pMac->hHdd, overFlowP2pStream, noaStream + noaLen - overFlowLen, overFlowLen); 
+   noaStream[noaLen - overFlowLen] = SIR_MAC_EID_VENDOR;
+   noaStream[noaLen - overFlowLen+1] = overFlowLen + SIR_MAC_P2P_OUI_SIZE;
+   palCopyMemory( pMac->hHdd, noaStream+ noaLen - overFlowLen+2,SIR_MAC_P2P_OUI,SIR_MAC_P2P_OUI_SIZE);
+   
+   palCopyMemory( pMac->hHdd, noaStream+ noaLen - overFlowLen+2+SIR_MAC_P2P_OUI_SIZE,overFlowP2pStream,overFlowLen);
    return (noaLen + SIR_P2P_IE_HEADER_LEN);
 
 }
@@ -7812,16 +7612,4 @@ tANI_U8 limGetShortSlotFromPhyMode(tpAniSirGlobal pMac, tpPESession psessionEntr
     }
     limLog(pMac, LOG1, FL("phyMode = %u shortslotsupported = %u"), phyMode, val);
     return val;
-}
-
-void limDecrementPendingMgmtCount (tpAniSirGlobal pMac)
-{
-    if( pMac->sys.gSysBbtPendingMgmtCount )
-    {
-         vos_spin_lock_acquire( &pMac->sys.lock );
-         pMac->sys.gSysBbtPendingMgmtCount--;
-         vos_spin_lock_release( &pMac->sys.lock );
-    }
-    else
-         limLog(pMac, LOGW, FL("Pending Management count going negative"));
 }
