@@ -119,6 +119,14 @@ static void __limInitScanVars(tpAniSirGlobal pMac)
     palZeroMemory(pMac->hHdd, pMac->lim.gLimCachedScanHashTable,
                     sizeof(pMac->lim.gLimCachedScanHashTable));
 
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+
+    pMac->lim.gLimMlmLfrScanResultLength = 0;
+    pMac->lim.gLimSmeLfrScanResultLength = 0;
+
+    palZeroMemory(pMac->hHdd, pMac->lim.gLimCachedLfrScanHashTable,
+                    sizeof(pMac->lim.gLimCachedLfrScanHashTable));
+#endif
     pMac->lim.gLimBackgroundScanChannelId = 0;
     pMac->lim.gLimBackgroundScanStarted = 0;
     pMac->lim.gLimRestoreCBNumScanInterval = LIM_RESTORE_CB_NUM_SCAN_INTERVAL_DEFAULT;
@@ -132,6 +140,7 @@ static void __limInitScanVars(tpAniSirGlobal pMac)
     // abort scan is used to abort an on-going scan
     pMac->lim.abortScan = 0;
     palZeroMemory(pMac->hHdd, &pMac->lim.scanChnInfo, sizeof(tLimScanChnInfo));
+    palZeroMemory(pMac->hHdd, &pMac->lim.dfschannelList, sizeof(tSirDFSChannelList));
 
 //WLAN_SUSPEND_LINK Related
     pMac->lim.gpLimSuspendCallback = NULL;
@@ -642,6 +651,9 @@ tSirRetStatus limStart(tpAniSirGlobal pMac)
       // By default return unique scan results
       pMac->lim.gLimReturnUniqueResults = true;
       pMac->lim.gLimSmeScanResultLength = 0;
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+      pMac->lim.gLimSmeLfrScanResultLength = 0;
+#endif
    }
    else
    {
@@ -746,7 +758,6 @@ limInitialize(tpAniSirGlobal pMac)
     
     vos_trace_setLevel(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR);
 #endif
-    MTRACE(limTraceInit(pMac));
 
     //Initialize the configurations needed by PE
     if( eSIR_FAILURE == __limInitConfig(pMac))
@@ -948,6 +959,7 @@ tSirRetStatus peOpen(tpAniSirGlobal pMac, tMacOpenParameters *pMacOpenParam)
 {
     pMac->lim.maxBssId = pMacOpenParam->maxBssId;
     pMac->lim.maxStation = pMacOpenParam->maxStation;
+    vos_spin_lock_init( &pMac->sys.lock );
 
     if ((pMac->lim.maxBssId == 0) || (pMac->lim.maxStation == 0))
     {
@@ -1013,6 +1025,16 @@ tSirRetStatus peOpen(tpAniSirGlobal pMac, tMacOpenParameters *pMacOpenParam)
         PELOGE(limLog(pMac, LOGE, FL("pe lock init failed!"));)
         return eSIR_FAILURE;
     }
+    pMac->lim.retryPacketCnt = 0;
+
+    /*
+     * peOpen is successful by now, so it is right time to initialize
+     * MTRACE for PE module. if LIM_TRACE_RECORD is not defined in build file
+     * then nothing will be logged for PE module.
+     */
+#ifdef LIM_TRACE_RECORD
+    MTRACE(limTraceInit(pMac));
+#endif
     return eSIR_SUCCESS;
 }
 
@@ -1029,7 +1051,9 @@ tSirRetStatus peClose(tpAniSirGlobal pMac)
 
     if (ANI_DRIVER_TYPE(pMac) == eDRIVER_TYPE_MFG)
         return eSIR_SUCCESS;
-    
+
+    vos_spin_lock_destroy( &pMac->sys.lock );
+
     for(i =0; i < pMac->lim.maxBssId; i++)
     {
         if(pMac->lim.gpSession[i].valid == TRUE)
@@ -1282,7 +1306,7 @@ tSirRetStatus peProcessMessages(tpAniSirGlobal pMac, tSirMsgQ* pMsg)
     return eSIR_SUCCESS;
 }
 
-
+#define RSRVD_MGMT_RX_PACKETS 10
 
 // ---------------------------------------------------------------------------
 /**
@@ -1356,12 +1380,45 @@ VOS_STATUS peHandleMgmtFrame( v_PVOID_t pvosGCtx, v_PVOID_t vosBuff)
     msg.bodyptr = vosBuff;
     msg.bodyval = 0;
 
+    vos_spin_lock_acquire( &pMac->sys.lock );
+    if( pMac->sys.gSysBbtPendingMgmtCount > (vos_pkt_get_num_of_rx_raw_pkts()/4) )
+    {
+        vos_spin_lock_release( &pMac->sys.lock );
+        // drop all management packets
+        limLog( pMac, LOGW,
+                FL ( "Management queue 1/4th full, dropping management packets" ));
+        vos_pkt_return_packet(pVosPkt);
+        return  VOS_STATUS_SUCCESS;
+    }
+
+    if( pMac->sys.gSysBbtPendingMgmtCount > ( vos_pkt_get_num_of_rx_raw_pkts()/4
+                                              - RSRVD_MGMT_RX_PACKETS ))
+    {
+        // drop all probereq, proberesp and beacons
+        if( mHdr->fc.subType == SIR_MAC_MGMT_BEACON ||  mHdr->fc.subType ==
+            SIR_MAC_MGMT_PROBE_REQ ||  mHdr->fc.subType == SIR_MAC_MGMT_PROBE_RSP )
+        {
+            vos_spin_lock_release( &pMac->sys.lock );
+            limLog( pMac, LOGW,
+                    FL ( "Dropping probe req, probe resp or beacon" ));
+            vos_pkt_return_packet(pVosPkt);
+            return  VOS_STATUS_SUCCESS;
+        }
+    }
+    pMac->sys.gSysBbtPendingMgmtCount++;
+    vos_spin_lock_release( &pMac->sys.lock );
+
     if( eSIR_SUCCESS != sysBbtProcessMessageCore( pMac,
                                                   &msg,
                                                   mHdr->fc.type,
                                                   mHdr->fc.subType ))
     {
         vos_pkt_return_packet(pVosPkt);
+
+        /* Decrement gSysBbtPendingMgmtCount if packet
+         * is dropped before posting to LIM
+         */
+        limDecrementPendingMgmtCount(pMac);
         limLog( pMac, LOGW,
                 FL ( "sysBbtProcessMessageCore failed to process SIR_BB_XPORT_MGMT_MSG" ));
         return VOS_STATUS_E_FAILURE;
@@ -1702,19 +1759,49 @@ limDetectChangeInApCapabilities(tpAniSirGlobal pMac,
     tANI_U8                 len;
     tSirSmeApNewCaps   apNewCaps;
     tANI_U8            newChannel;
+    tSirRetStatus status = eSIR_SUCCESS;
     apNewCaps.capabilityInfo = limGetU16((tANI_U8 *) &pBeacon->capabilityInfo);
     newChannel = (tANI_U8) pBeacon->channelNumber;
 
-    if ((psessionEntry->limSentCapsChangeNtf == false) && 
-        (((!limIsNullSsid(&pBeacon->ssId)) && (limCmpSSid(pMac, &pBeacon->ssId, psessionEntry) == false)) || 
-        ((SIR_MAC_GET_ESS(apNewCaps.capabilityInfo) != SIR_MAC_GET_ESS(psessionEntry->limCurrentBssCaps)) ||
-         (SIR_MAC_GET_PRIVACY(apNewCaps.capabilityInfo) !=   SIR_MAC_GET_PRIVACY(psessionEntry->limCurrentBssCaps)) ||
-         (SIR_MAC_GET_SHORT_PREAMBLE(apNewCaps.capabilityInfo) !=  SIR_MAC_GET_SHORT_PREAMBLE(psessionEntry->limCurrentBssCaps)) ||
-         (SIR_MAC_GET_QOS(apNewCaps.capabilityInfo) !=   SIR_MAC_GET_QOS(psessionEntry->limCurrentBssCaps)) ||
-         (newChannel !=  psessionEntry->currentOperChannel) 
-         )))
+    if ( ( false == psessionEntry->limSentCapsChangeNtf ) &&
+        ( ( ( limIsNullSsid(&pBeacon->ssId) ) ||
+          ( ( !limIsNullSsid(&pBeacon->ssId) ) &&
+             ( false == limCmpSSid(pMac, &pBeacon->ssId, psessionEntry) ) ) ) ||
+          ( (SIR_MAC_GET_ESS(apNewCaps.capabilityInfo) !=
+             SIR_MAC_GET_ESS(psessionEntry->limCurrentBssCaps) ) ||
+          ( SIR_MAC_GET_PRIVACY(apNewCaps.capabilityInfo) !=
+            SIR_MAC_GET_PRIVACY(psessionEntry->limCurrentBssCaps) ) ||
+          ( SIR_MAC_GET_SHORT_PREAMBLE(apNewCaps.capabilityInfo) !=
+            SIR_MAC_GET_SHORT_PREAMBLE(psessionEntry->limCurrentBssCaps) ) ||
+          ( SIR_MAC_GET_QOS(apNewCaps.capabilityInfo) !=
+            SIR_MAC_GET_QOS(psessionEntry->limCurrentBssCaps) ) ||
+          ( newChannel !=  psessionEntry->currentOperChannel )
+          ) ) )
     {
+        if( false == psessionEntry->fWaitForProbeRsp )
+        {
+            /* If Beacon capabilities is not matching with the current capability,
+             * then send unicast probe request to AP and take decision after
+             * receiving probe response */
+            if ( true == psessionEntry->fIgnoreCapsChange )
+            {
+                limLog(pMac, LOGW, FL("Ignoring the Capability change as it is false alarm"));
+                return;
+            }
+            psessionEntry->fWaitForProbeRsp = true;
+            limLog(pMac, LOGW, FL("AP capabilities are not matching,"
+                   "sending directed probe request.. "));
+            status = limSendProbeReqMgmtFrame(pMac, &psessionEntry->ssId, psessionEntry->bssId,
+                    psessionEntry->currentOperChannel,psessionEntry->selfMacAddr,
+                    psessionEntry->dot11mode, 0, NULL);
 
+            if ( eSIR_SUCCESS != status )
+            {
+               limLog(pMac, LOGE, FL("send ProbeReq failed"));
+               psessionEntry->fWaitForProbeRsp = false;
+            }
+            return;
+        }
         /**
          * BSS capabilities have changed.
          * Inform Roaming.
@@ -1758,11 +1845,27 @@ limDetectChangeInApCapabilities(tpAniSirGlobal pMac,
                       (tANI_U8 *) &pBeacon->ssId,
                       pBeacon->ssId.length + 1);
 
+        psessionEntry->fIgnoreCapsChange = false;
+        psessionEntry->fWaitForProbeRsp = false;
         psessionEntry->limSentCapsChangeNtf = true;
         limSendSmeWmStatusChangeNtf(pMac, eSIR_SME_AP_CAPS_CHANGED,
                                     (tANI_U32 *) &apNewCaps,
                                     len, psessionEntry->smeSessionId);
     }
+    else if ( true == psessionEntry->fWaitForProbeRsp )
+    {
+        /* Only for probe response frames and matching capabilities the control
+         * will come here. If beacon is with broadcast ssid then fWaitForProbeRsp
+         * will be false, the control will not come here*/
+
+        limLog(pMac, LOG1, FL("capabilities in probe response are"
+                    "matching with the current setting,"
+                    "Ignoring subsequent capability"
+                    "mismatch"));
+        psessionEntry->fIgnoreCapsChange = true;
+        psessionEntry->fWaitForProbeRsp = false;
+     }
+
 } /*** limDetectChangeInApCapabilities() ***/
 
 
@@ -2098,6 +2201,12 @@ tMgmtFrmDropReason limIsPktCandidateForDrop(tpAniSirGlobal pMac, tANI_U8 *pRxPac
         {
             return eMGMT_DROP_NO_DROP;
         }
+#ifdef WLAN_FEATURE_ROAM_SCAN_OFFLOAD
+        else if (WDA_GET_OFFLOADSCANLEARN(pRxPacketInfo) || WDA_GET_ROAMCANDIDATEIND(pRxPacketInfo))
+        {
+            return eMGMT_DROP_NO_DROP;
+        }
+#endif
         else if (WDA_IS_RX_IN_SCAN(pRxPacketInfo))
         {
             return eMGMT_DROP_SCAN_MODE_FRAME;
